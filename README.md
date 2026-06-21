@@ -89,6 +89,24 @@ coherent conductivity structure, use Gaussian orientation blobs:
 .venv/bin/python train.py --task darcy --darcy-orientation blobs --darcy-vertex-projection none --model vertex --epochs 100 --train-samples 512 --val-samples 128 --save outputs/vertex_darcy_blobs_no_vertex_projection.pt
 ```
 
+## Summarize Results
+
+Each new training run writes a checkpoint plus a sidecar history file:
+
+```text
+outputs/name.pt
+outputs/name.history.json
+```
+
+Generate or refresh the Markdown experiment report with:
+
+```bash
+.venv/bin/python scripts/summarize_results.py
+```
+
+The report is written to `docs/experiment_summary.md`. By default, smoke-test
+checkpoints are ignored; add `--include-smoke` if you want to include them.
+
 ## Project Layout
 
 ```text

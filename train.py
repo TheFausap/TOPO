@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import random
 from pathlib import Path
@@ -70,6 +71,12 @@ def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
 
 
+def jsonable_args(args: argparse.Namespace) -> dict[str, object]:
+    result = vars(args).copy()
+    result["save"] = str(args.save)
+    return result
+
+
 def sample_relative_l2(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     numerator = torch.linalg.vector_norm(pred - target, dim=(-2, -1))
     denominator = torch.linalg.vector_norm(target, dim=(-2, -1)).clamp_min(1e-8)
@@ -120,6 +127,7 @@ def main() -> None:
     args = parse_args()
     set_seed(args.seed)
     device = torch.device("cpu")
+    run_args = jsonable_args(args)
 
     complex_ = grid_complex(args.nx, args.ny)
     ops = DECOperators.from_complex(complex_, device=device)
@@ -185,20 +193,50 @@ def main() -> None:
 
     best_val = math.inf
     args.save.parent.mkdir(parents=True, exist_ok=True)
+    history_path = args.save.with_suffix(".history.json")
+    history: list[dict[str, float | int | str]] = []
     for epoch in range(1, args.epochs + 1):
         train_loss, train_sample_rel, train_rel = run_epoch(
             model, ops, train_loader, optimizer, device
         )
         with torch.no_grad():
             val_loss, val_sample_rel, val_rel = run_epoch(model, ops, val_loader, None, device)
-        if val_rel < best_val:
+        is_best = val_rel < best_val
+        record = {
+            "epoch": epoch,
+            "model": args.model,
+            "task": args.task,
+            "train_mse": train_loss,
+            "train_rel_l2": train_rel,
+            "train_sample_rel_l2": train_sample_rel,
+            "val_mse": val_loss,
+            "val_rel_l2": val_rel,
+            "val_sample_rel_l2": val_sample_rel,
+            "is_best": is_best,
+        }
+        history.append(record)
+        history_path.write_text(
+            json.dumps(
+                {
+                    "args": run_args,
+                    "metric": "aggregate_relative_l2",
+                    "best_val_relative_l2": min(best_val, val_rel),
+                    "history": history,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        if is_best:
             best_val = val_rel
             torch.save(
                 {
                     "model": model.state_dict(),
-                    "args": vars(args),
+                    "args": run_args,
                     "best_val_relative_l2": best_val,
                     "metric": "aggregate_relative_l2",
+                    "history_path": str(history_path),
                 },
                 args.save,
             )
