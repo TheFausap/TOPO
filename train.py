@@ -10,8 +10,8 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from topo.complex import grid_complex
-from topo.data import AnisotropicDarcyDataset, PoissonDataset, poisson_collate
+from topo.complex import grid_complex, grid_complex_with_holes
+from topo.data import AnisotropicDarcyDataset, DarcyHolesDataset, PoissonDataset, poisson_collate
 from topo.dec import DECOperators
 from topo.tno import TopologicalNeuralOperator, VertexGraphOperator
 
@@ -30,7 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--model", choices=["tno", "vertex"], default="tno")
     parser.add_argument("--seed", type=int, default=7)
-    parser.add_argument("--task", choices=["poisson", "darcy"], default="poisson")
+    parser.add_argument("--task", choices=["poisson", "darcy", "darcy_holes"], default="poisson")
     parser.add_argument(
         "--darcy-min-solution-norm",
         type=float,
@@ -129,12 +129,16 @@ def main() -> None:
     device = torch.device("cpu")
     run_args = jsonable_args(args)
 
-    complex_ = grid_complex(args.nx, args.ny)
+    complex_ = (
+        grid_complex_with_holes(args.nx, args.ny)
+        if args.task == "darcy_holes"
+        else grid_complex(args.nx, args.ny)
+    )
     ops = DECOperators.from_complex(complex_, device=device)
     if args.task == "poisson":
         train_data = PoissonDataset(complex_, args.train_samples, seed=args.seed)
         val_data = PoissonDataset(complex_, args.val_samples, seed=args.seed + 1)
-    else:
+    elif args.task == "darcy":
         train_data = AnisotropicDarcyDataset(
             complex_,
             args.train_samples,
@@ -146,6 +150,27 @@ def main() -> None:
             orientation_sigma=args.darcy_orientation_sigma,
         )
         val_data = AnisotropicDarcyDataset(
+            complex_,
+            args.val_samples,
+            seed=args.seed + 1,
+            min_solution_norm=args.darcy_min_solution_norm,
+            vertex_projection=args.darcy_vertex_projection,
+            orientation_mode=args.darcy_orientation,
+            orientation_blobs=args.darcy_orientation_blobs,
+            orientation_sigma=args.darcy_orientation_sigma,
+        )
+    else:
+        train_data = DarcyHolesDataset(
+            complex_,
+            args.train_samples,
+            seed=args.seed,
+            min_solution_norm=args.darcy_min_solution_norm,
+            vertex_projection=args.darcy_vertex_projection,
+            orientation_mode=args.darcy_orientation,
+            orientation_blobs=args.darcy_orientation_blobs,
+            orientation_sigma=args.darcy_orientation_sigma,
+        )
+        val_data = DarcyHolesDataset(
             complex_,
             args.val_samples,
             seed=args.seed + 1,

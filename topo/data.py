@@ -195,12 +195,12 @@ class AnisotropicDarcyDataset(Dataset[PoissonSample]):
         kxy = diff * cos_phi * sin_phi
         return cos2, sin2, kxx.astype(np.float32), kyy.astype(np.float32), kxy.astype(np.float32)
 
-    def _assemble_operator(
+    def _assemble_full_operator(
         self,
         kxx: np.ndarray,
         kyy: np.ndarray,
         kxy: np.ndarray,
-    ) -> sp.csc_matrix:
+    ) -> sp.csr_matrix:
         rows: list[int] = []
         cols: list[int] = []
         data: list[float] = []
@@ -236,6 +236,15 @@ class AnisotropicDarcyDataset(Dataset[PoissonSample]):
             (data, (rows, cols)),
             shape=(self.complex.num_vertices, self.complex.num_vertices),
         ).tocsr()
+        return matrix
+
+    def _assemble_operator(
+        self,
+        kxx: np.ndarray,
+        kyy: np.ndarray,
+        kxy: np.ndarray,
+    ) -> sp.csc_matrix:
+        matrix = self._assemble_full_operator(kxx, kyy, kxy)
         return matrix[self.interior][:, self.interior].tocsc()
 
     def _project_faces_to_vertices(self, values: np.ndarray) -> np.ndarray:
@@ -274,6 +283,107 @@ class AnisotropicDarcyDataset(Dataset[PoissonSample]):
         face_orientation = np.concatenate([cos2, sin2], axis=1)
         edge_orientation = self._project_faces_to_edges(face_orientation)
         x0_parts = [f, self.vertex_xy, self.boundary]
+        if self.vertex_projection == "mean":
+            x0_parts.append(self._project_faces_to_vertices(face_orientation))
+        x0 = np.concatenate(x0_parts, axis=1).astype(np.float32)
+        x1 = np.concatenate([self.base_edge_features, edge_orientation], axis=1).astype(np.float32)
+        x2 = np.concatenate(
+            [self.base_face_features, cos2, sin2, kxx, kyy, kxy],
+            axis=1,
+        ).astype(np.float32)
+        return PoissonSample(
+            x0=torch.from_numpy(x0),
+            x1=torch.from_numpy(x1),
+            x2=torch.from_numpy(x2),
+            y0=torch.from_numpy(u),
+        )
+
+
+class DarcyHolesDataset(AnisotropicDarcyDataset):
+    """Anisotropic Darcy on a fixed square complex with circular holes."""
+
+    def __init__(
+        self,
+        complex_: CellComplex,
+        samples: int,
+        seed: int = 0,
+        k_parallel: float = 4.0,
+        k_perp: float = 1.0,
+        min_solution_norm: float = 0.5,
+        max_sample_attempts: int = 100,
+        vertex_projection: str = "none",
+        orientation_mode: str = "blobs",
+        orientation_blobs: int = 4,
+        orientation_sigma: float = 0.25,
+        hole_value_low: float = 0.5,
+        hole_value_high: float = 1.5,
+    ) -> None:
+        self.hole_value_low = hole_value_low
+        self.hole_value_high = hole_value_high
+        super().__init__(
+            complex_=complex_,
+            samples=samples,
+            seed=seed,
+            k_parallel=k_parallel,
+            k_perp=k_perp,
+            min_solution_norm=min_solution_norm,
+            max_sample_attempts=max_sample_attempts,
+            vertex_projection=vertex_projection,
+            orientation_mode=orientation_mode,
+            orientation_blobs=orientation_blobs,
+            orientation_sigma=orientation_sigma,
+        )
+        if self.complex.boundary_tags is None or np.max(self.complex.boundary_tags) < 1:
+            raise ValueError("DarcyHolesDataset requires a complex with tagged hole boundaries")
+
+    def _boundary_values(self) -> np.ndarray:
+        tags = self.complex.boundary_tags
+        if tags is None:
+            raise ValueError("boundary_tags are required")
+        values = np.zeros((self.complex.num_vertices, 1), dtype=np.float32)
+        for hole_tag in range(1, int(tags.max()) + 1):
+            hole_value = float(self.rng.uniform(self.hole_value_low, self.hole_value_high))
+            values[tags == hole_tag, 0] = hole_value
+        values[tags == -1, 0] = 0.0
+        return values
+
+    def _solve_with_boundary_values(
+        self,
+        operator: sp.csr_matrix,
+        f: np.ndarray,
+        boundary_values: np.ndarray,
+    ) -> np.ndarray:
+        boundary = self.complex.boundary_vertices
+        interior = ~boundary
+        rhs = f[interior, 0] - operator[interior][:, boundary] @ boundary_values[boundary, 0]
+        u = boundary_values.copy()
+        u[interior, 0] = spla.spsolve(operator[interior][:, interior].tocsc(), rhs).astype(
+            np.float32
+        )
+        return u
+
+    def _make_sample(self) -> PoissonSample:
+        for _ in range(self.max_sample_attempts):
+            f = self._forcing()
+            boundary_values = self._boundary_values()
+            cos2, sin2, kxx, kyy, kxy = self._conductivity()
+            operator = self._assemble_full_operator(kxx, kyy, kxy)
+            u = self._solve_with_boundary_values(operator, f, boundary_values)
+            if float(np.linalg.norm(u)) >= self.min_solution_norm:
+                break
+        else:
+            raise RuntimeError(
+                "Could not generate a Darcy-holes sample with a nontrivial solution norm. "
+                "Lower min_solution_norm or increase max_sample_attempts."
+            )
+
+        face_orientation = np.concatenate([cos2, sin2], axis=1)
+        edge_orientation = self._project_faces_to_edges(face_orientation)
+        boundary_tag_channel = (
+            self.complex.boundary_tags.astype(np.float32)[:, None]
+            / max(float(np.max(np.abs(self.complex.boundary_tags))), 1.0)
+        )
+        x0_parts = [f, self.vertex_xy, self.boundary, boundary_values, boundary_tag_channel]
         if self.vertex_projection == "mean":
             x0_parts.append(self._project_faces_to_vertices(face_orientation))
         x0 = np.concatenate(x0_parts, axis=1).astype(np.float32)

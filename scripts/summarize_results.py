@@ -153,11 +153,11 @@ def deduplicate_runs(runs: list[RunSummary]) -> list[RunSummary]:
 
 
 def describe_experiment(run: RunSummary) -> str:
-    if run.task != "darcy":
+    if run.task not in {"darcy", "darcy_holes"}:
         return run.task
     projection = run.args.get("darcy_vertex_projection", "mean")
     orientation = run.args.get("darcy_orientation", "iid")
-    return f"darcy/orientation={orientation}/vertex_projection={projection}"
+    return f"{run.task}/orientation={orientation}/vertex_projection={projection}"
 
 
 def make_markdown(runs: list[RunSummary]) -> str:

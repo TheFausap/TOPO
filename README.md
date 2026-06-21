@@ -122,11 +122,29 @@ Available experiment names are:
 - `darcy_iid_mean`
 - `darcy_iid_none`
 - `darcy_blobs_none`
+- `darcy_holes_blobs_none`
 
 Check the runner on tiny settings first with:
 
 ```bash
 .venv/bin/python scripts/run_experiments.py --quick --experiments darcy_blobs_none --seeds 1 --overwrite
+```
+
+## Topological Darcy With Holes
+
+The first topology-aware dataset uses a fixed square mesh with two circular holes.
+The outer boundary is fixed to `u=0`; each hole boundary receives a random
+Dirichlet value per sample. The coefficient field remains face-native.
+
+```bash
+.venv/bin/python train.py --task darcy_holes --darcy-orientation blobs --darcy-vertex-projection none --model tno --epochs 100 --train-samples 512 --val-samples 128 --save outputs/tno_darcy_holes_blobs_no_vertex_projection.pt
+.venv/bin/python train.py --task darcy_holes --darcy-orientation blobs --darcy-vertex-projection none --model vertex --epochs 100 --train-samples 512 --val-samples 128 --save outputs/vertex_darcy_holes_blobs_no_vertex_projection.pt
+```
+
+For repeated seeds:
+
+```bash
+.venv/bin/python scripts/run_experiments.py --experiments darcy_holes_blobs_none --seeds 7,8,9
 ```
 
 ## Project Layout

@@ -37,6 +37,17 @@ EXPERIMENTS: dict[str, Experiment] = {
             "none",
         ),
     ),
+    "darcy_holes_blobs_none": Experiment(
+        name="darcy_holes_blobs_none",
+        args=(
+            "--task",
+            "darcy_holes",
+            "--darcy-orientation",
+            "blobs",
+            "--darcy-vertex-projection",
+            "none",
+        ),
+    ),
 }
 
 
