@@ -18,6 +18,12 @@ Equivalent artifacts are deduplicated by experiment, model, and seed.
 | darcy/orientation=iid/vertex_projection=mean | vertex | 0.2183 | n/a | n/a | n/a | `outputs/vertex_darcy.pt` |
 | darcy/orientation=iid/vertex_projection=none | tno | 0.1847 | n/a | n/a | n/a | `outputs/tno_darcy_no_vertex_projection.pt` |
 | darcy/orientation=iid/vertex_projection=none | vertex | 0.1968 | n/a | n/a | n/a | `outputs/vertex_darcy_no_vertex_projection.pt` |
+| darcy_holes/orientation=blobs/vertex_projection=none | tno | 0.0894 | 0.0929 | 0.0895 | 0.0036 | `outputs/darcy_holes_blobs_none_tno_seed7.pt` |
+| darcy_holes/orientation=blobs/vertex_projection=none | tno | 0.0882 | 0.0882 | 0.0853 | 0.0031 | `outputs/darcy_holes_blobs_none_tno_seed8.pt` |
+| darcy_holes/orientation=blobs/vertex_projection=none | tno | 0.0972 | 0.0972 | 0.0866 | 0.0038 | `outputs/darcy_holes_blobs_none_tno_seed9.pt` |
+| darcy_holes/orientation=blobs/vertex_projection=none | vertex | 0.1821 | 0.1870 | 0.1802 | 0.0145 | `outputs/darcy_holes_blobs_none_vertex_seed7.pt` |
+| darcy_holes/orientation=blobs/vertex_projection=none | vertex | 0.1899 | 0.1905 | 0.1792 | 0.0144 | `outputs/darcy_holes_blobs_none_vertex_seed8.pt` |
+| darcy_holes/orientation=blobs/vertex_projection=none | vertex | 0.1937 | 0.2045 | 0.1927 | 0.0169 | `outputs/darcy_holes_blobs_none_vertex_seed9.pt` |
 | poisson | tno | 0.1792 | n/a | n/a | n/a | `outputs/tno_poisson.pt` |
 | poisson | vertex | 0.1988 | n/a | n/a | n/a | `outputs/vertex_poisson.pt` |
 
@@ -28,6 +34,7 @@ Equivalent artifacts are deduplicated by experiment, model, and seed.
 | darcy/orientation=blobs/vertex_projection=none | 7, 8, 9 | 0.1809 +/- 0.0065 | 0.2433 +/- 0.0091 | +25.6% |
 | darcy/orientation=iid/vertex_projection=mean | 7 | 0.2021 | 0.2183 | +7.4% |
 | darcy/orientation=iid/vertex_projection=none | 7 | 0.1847 | 0.1968 | +6.1% |
+| darcy_holes/orientation=blobs/vertex_projection=none | 7, 8, 9 | 0.0916 +/- 0.0049 | 0.1886 +/- 0.0059 | +51.4% |
 | poisson | 7 | 0.1792 | 0.1988 | +9.8% |
 
 ## Matched Comparisons
@@ -39,6 +46,9 @@ Equivalent artifacts are deduplicated by experiment, model, and seed.
 | darcy/orientation=blobs/vertex_projection=none | 0.1738 | 0.2332 | +25.5% | TNO better |
 | darcy/orientation=iid/vertex_projection=mean | 0.2021 | 0.2183 | +7.4% | TNO better |
 | darcy/orientation=iid/vertex_projection=none | 0.1847 | 0.1968 | +6.1% | TNO better |
+| darcy_holes/orientation=blobs/vertex_projection=none | 0.0894 | 0.1821 | +50.9% | TNO better |
+| darcy_holes/orientation=blobs/vertex_projection=none | 0.0882 | 0.1899 | +53.5% | TNO better |
+| darcy_holes/orientation=blobs/vertex_projection=none | 0.0972 | 0.1937 | +49.8% | TNO better |
 | poisson | 0.1792 | 0.1988 | +9.8% | TNO better |
 
 ## Current Takeaways
