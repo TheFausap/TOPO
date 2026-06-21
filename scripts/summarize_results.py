@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import statistics
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,21 @@ class RunSummary:
             self.args.get("darcy_min_solution_norm", 0.5),
         )
 
+    @property
+    def experiment_family_key(self) -> tuple[Any, ...]:
+        return (
+            self.task,
+            self.args.get("nx", 16),
+            self.args.get("ny", 16),
+            self.args.get("train_samples"),
+            self.args.get("val_samples"),
+            self.args.get("darcy_vertex_projection", "mean"),
+            self.args.get("darcy_orientation", "iid"),
+            self.args.get("darcy_orientation_blobs", 4),
+            self.args.get("darcy_orientation_sigma", 0.25),
+            self.args.get("darcy_min_solution_norm", 0.5),
+        )
+
 
 def _fmt(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.4f}"
@@ -44,6 +60,14 @@ def _fmt(value: float | None) -> str:
 
 def _pct_improvement(reference: float, candidate: float) -> float:
     return 100.0 * (reference - candidate) / reference
+
+
+def _fmt_mean_std(values: list[float]) -> str:
+    if not values:
+        return "n/a"
+    if len(values) == 1:
+        return f"{values[0]:.4f}"
+    return f"{statistics.mean(values):.4f} +/- {statistics.stdev(values):.4f}"
 
 
 def load_history(path: Path) -> dict[str, Any]:
@@ -141,6 +165,54 @@ def make_markdown(runs: list[RunSummary]) -> str:
             f"{_fmt(run.final_val_mse)} | "
             f"`{run.path}` |"
         )
+
+    lines.extend(["", "## Seed Aggregates", ""])
+    family_groups: dict[tuple[Any, ...], dict[str, list[RunSummary]]] = {}
+    for run in runs:
+        family_groups.setdefault(run.experiment_family_key, {}).setdefault(run.model, []).append(run)
+
+    aggregate_rows = []
+    for by_model in family_groups.values():
+        tno_runs = by_model.get("tno", [])
+        vertex_runs = by_model.get("vertex", [])
+        if not tno_runs or not vertex_runs:
+            continue
+        tno_values = [run.best_val_rel_l2 for run in tno_runs if run.best_val_rel_l2 is not None]
+        vertex_values = [
+            run.best_val_rel_l2 for run in vertex_runs if run.best_val_rel_l2 is not None
+        ]
+        if not tno_values or not vertex_values:
+            continue
+        description = describe_experiment(tno_runs[0])
+        tno_seeds = {run.args.get("seed", 7) for run in tno_runs}
+        vertex_seeds = {run.args.get("seed", 7) for run in vertex_runs}
+        common_seeds = sorted(tno_seeds & vertex_seeds)
+        aggregate_rows.append((description, tno_values, vertex_values, common_seeds))
+
+    if not aggregate_rows:
+        lines.append("No aggregate seed groups found.")
+    else:
+        lines.extend(
+            [
+                "| Experiment | Seeds | TNO best mean | Vertex best mean | TNO improvement |",
+                "|---|---:|---:|---:|---:|",
+            ]
+        )
+        for description, tno_values, vertex_values, common_seeds in sorted(
+            aggregate_rows, key=lambda item: item[0]
+        ):
+            tno_mean = statistics.mean(tno_values)
+            vertex_mean = statistics.mean(vertex_values)
+            improvement = _pct_improvement(vertex_mean, tno_mean)
+            seeds = ", ".join(str(seed) for seed in common_seeds) if common_seeds else "mixed"
+            lines.append(
+                "| "
+                f"{description} | "
+                f"{seeds} | "
+                f"{_fmt_mean_std(tno_values)} | "
+                f"{_fmt_mean_std(vertex_values)} | "
+                f"{improvement:+.1f}% |"
+            )
 
     lines.extend(["", "## Matched Comparisons", ""])
     groups: dict[tuple[Any, ...], dict[str, RunSummary]] = {}

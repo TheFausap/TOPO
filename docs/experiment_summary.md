@@ -16,6 +16,15 @@ Lower relative L2 is better. Checkpoints are selected by aggregate validation re
 | poisson | tno | 0.1792 | n/a | n/a | n/a | `outputs/tno_poisson.pt` |
 | poisson | vertex | 0.1988 | n/a | n/a | n/a | `outputs/vertex_poisson.pt` |
 
+## Seed Aggregates
+
+| Experiment | Seeds | TNO best mean | Vertex best mean | TNO improvement |
+|---|---:|---:|---:|---:|
+| darcy/orientation=blobs/vertex_projection=none | 7 | 0.1865 | 0.2508 | +25.6% |
+| darcy/orientation=iid/vertex_projection=mean | 7 | 0.2021 | 0.2183 | +7.4% |
+| darcy/orientation=iid/vertex_projection=none | 7 | 0.1847 | 0.1968 | +6.1% |
+| poisson | 7 | 0.1792 | 0.1988 | +9.8% |
+
 ## Matched Comparisons
 
 | Experiment | TNO best | Vertex best | TNO improvement | Notes |

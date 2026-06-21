@@ -107,6 +107,28 @@ Generate or refresh the Markdown experiment report with:
 The report is written to `docs/experiment_summary.md`. By default, smoke-test
 checkpoints are ignored; add `--include-smoke` if you want to include them.
 
+## Run Repeat-Seed Sweeps
+
+Use the sweep runner to launch paired TNO/vertex experiments across seeds and
+refresh the summary report automatically:
+
+```bash
+.venv/bin/python scripts/run_experiments.py --experiments darcy_blobs_none --seeds 7,8,9
+```
+
+Available experiment names are:
+
+- `poisson`
+- `darcy_iid_mean`
+- `darcy_iid_none`
+- `darcy_blobs_none`
+
+Check the runner on tiny settings first with:
+
+```bash
+.venv/bin/python scripts/run_experiments.py --quick --experiments darcy_blobs_none --seeds 1 --overwrite
+```
+
 ## Project Layout
 
 ```text
