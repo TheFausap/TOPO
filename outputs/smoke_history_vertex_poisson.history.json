@@ -1,0 +1,51 @@
+{
+  "args": {
+    "nx": 8,
+    "ny": 8,
+    "train_samples": 16,
+    "val_samples": 8,
+    "epochs": 2,
+    "batch_size": 4,
+    "hidden_dim": 12,
+    "layers": 1,
+    "dropout": 0.0,
+    "lr": 0.0003,
+    "model": "vertex",
+    "seed": 7,
+    "task": "poisson",
+    "darcy_min_solution_norm": 0.5,
+    "darcy_vertex_projection": "mean",
+    "darcy_orientation": "iid",
+    "darcy_orientation_blobs": 4,
+    "darcy_orientation_sigma": 0.25,
+    "save": "outputs/smoke_history_vertex_poisson.pt"
+  },
+  "metric": "aggregate_relative_l2",
+  "best_val_relative_l2": 1.0224168521805772,
+  "history": [
+    {
+      "epoch": 1,
+      "model": "vertex",
+      "task": "poisson",
+      "train_mse": 0.0910199973732233,
+      "train_rel_l2": 1.0294070419368715,
+      "train_sample_rel_l2": 1.3944025933742523,
+      "val_mse": 0.12334050610661507,
+      "val_rel_l2": 1.0350940124114039,
+      "val_sample_rel_l2": 1.3096943795681,
+      "is_best": true
+    },
+    {
+      "epoch": 2,
+      "model": "vertex",
+      "task": "poisson",
+      "train_mse": 0.08815641328692436,
+      "train_rel_l2": 1.0130845418070147,
+      "train_sample_rel_l2": 1.3504740297794342,
+      "val_mse": 0.1203378178179264,
+      "val_rel_l2": 1.0224168521805772,
+      "val_sample_rel_l2": 1.2434592247009277,
+      "is_best": true
+    }
+  ]
+}
