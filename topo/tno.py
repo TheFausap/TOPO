@@ -75,6 +75,12 @@ class TopologicalNeuralOperator(nn.Module):
             nn.GELU(),
             nn.Linear(hidden_dim, 1),
         )
+        self.edge_decoder = nn.Sequential(
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, 1),
+        )
 
     def forward(
         self,
@@ -82,13 +88,17 @@ class TopologicalNeuralOperator(nn.Module):
         x0: torch.Tensor,
         x1: torch.Tensor,
         x2: torch.Tensor,
-    ) -> torch.Tensor:
+        return_edges: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         h0 = self.vertex_encoder(x0)
         h1 = self.edge_encoder(x1)
         h2 = self.face_encoder(x2)
         for layer in self.layers:
             h0, h1, h2 = layer(ops, h0, h1, h2)
-        return self.decoder(h0)
+        y0 = self.decoder(h0)
+        if return_edges:
+            return y0, self.edge_decoder(h1)
+        return y0
 
 
 class VertexGraphLayer(nn.Module):
@@ -124,6 +134,12 @@ class VertexGraphOperator(nn.Module):
             nn.GELU(),
             nn.Linear(hidden_dim, 1),
         )
+        self.edge_decoder = nn.Sequential(
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, 1),
+        )
 
     def forward(
         self,
@@ -131,9 +147,13 @@ class VertexGraphOperator(nn.Module):
         x0: torch.Tensor,
         x1: torch.Tensor | None = None,
         x2: torch.Tensor | None = None,
-    ) -> torch.Tensor:
+        return_edges: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         del x1, x2
         h0 = self.encoder(x0)
         for layer in self.layers:
             h0 = layer(ops, h0)
-        return self.decoder(h0)
+        y0 = self.decoder(h0)
+        if return_edges:
+            return y0, self.edge_decoder(ops.d0(h0))
+        return y0

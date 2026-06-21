@@ -30,7 +30,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--model", choices=["tno", "vertex"], default="tno")
     parser.add_argument("--seed", type=int, default=7)
-    parser.add_argument("--task", choices=["poisson", "darcy", "darcy_holes"], default="poisson")
+    parser.add_argument(
+        "--task",
+        choices=["poisson", "darcy", "darcy_holes", "darcy_holes_flux"],
+        default="poisson",
+    )
     parser.add_argument(
         "--darcy-min-solution-norm",
         type=float,
@@ -77,9 +81,19 @@ def jsonable_args(args: argparse.Namespace) -> dict[str, object]:
     return result
 
 
-def sample_relative_l2(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-    numerator = torch.linalg.vector_norm(pred - target, dim=(-2, -1))
-    denominator = torch.linalg.vector_norm(target, dim=(-2, -1)).clamp_min(1e-8)
+def sample_relative_l2(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    pred_edge: torch.Tensor | None = None,
+    target_edge: torch.Tensor | None = None,
+) -> torch.Tensor:
+    numerator_sq = torch.sum((pred - target) ** 2, dim=(-2, -1))
+    denominator_sq = torch.sum(target**2, dim=(-2, -1))
+    if pred_edge is not None and target_edge is not None:
+        numerator_sq = numerator_sq + torch.sum((pred_edge - target_edge) ** 2, dim=(-2, -1))
+        denominator_sq = denominator_sq + torch.sum(target_edge**2, dim=(-2, -1))
+    numerator = torch.sqrt(numerator_sq)
+    denominator = torch.sqrt(denominator_sq).clamp_min(1e-8)
     return (numerator / denominator).mean()
 
 
@@ -98,15 +112,24 @@ def run_epoch(
     total_target_sq = 0.0
     total_items = 0
 
-    for x0, x1, x2, y0 in loader:
+    for x0, x1, x2, y0, y1 in loader:
         x0 = x0.to(device)
         x1 = x1.to(device)
         x2 = x2.to(device)
         y0 = y0.to(device)
+        y1 = y1.to(device) if y1 is not None else None
         if training:
             optimizer.zero_grad(set_to_none=True)
-        pred = model(ops, x0, x1, x2)
-        loss = torch.nn.functional.mse_loss(pred, y0)
+        output = model(ops, x0, x1, x2, return_edges=y1 is not None)
+        if y1 is None:
+            pred = output
+            pred_edge = None
+            loss = torch.nn.functional.mse_loss(pred, y0)
+        else:
+            pred, pred_edge = output
+            loss = torch.nn.functional.mse_loss(pred, y0) + torch.nn.functional.mse_loss(
+                pred_edge, y1
+            )
         if training:
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -114,9 +137,19 @@ def run_epoch(
 
         batch = x0.shape[0]
         total_loss += float(loss.detach()) * batch
-        total_sample_rel += float(sample_relative_l2(pred.detach(), y0)) * batch
+        total_sample_rel += float(
+            sample_relative_l2(
+                pred.detach(),
+                y0,
+                pred_edge.detach() if pred_edge is not None else None,
+                y1,
+            )
+        ) * batch
         total_error_sq += float(torch.sum((pred.detach() - y0) ** 2))
         total_target_sq += float(torch.sum(y0**2))
+        if pred_edge is not None and y1 is not None:
+            total_error_sq += float(torch.sum((pred_edge.detach() - y1) ** 2))
+            total_target_sq += float(torch.sum(y1**2))
         total_items += batch
 
     aggregate_rel = math.sqrt(total_error_sq / max(total_target_sq, 1e-12))
@@ -131,7 +164,7 @@ def main() -> None:
 
     complex_ = (
         grid_complex_with_holes(args.nx, args.ny)
-        if args.task == "darcy_holes"
+        if args.task in {"darcy_holes", "darcy_holes_flux"}
         else grid_complex(args.nx, args.ny)
     )
     ops = DECOperators.from_complex(complex_, device=device)
@@ -169,6 +202,7 @@ def main() -> None:
             orientation_mode=args.darcy_orientation,
             orientation_blobs=args.darcy_orientation_blobs,
             orientation_sigma=args.darcy_orientation_sigma,
+            predict_flux=args.task == "darcy_holes_flux",
         )
         val_data = DarcyHolesDataset(
             complex_,
@@ -179,6 +213,7 @@ def main() -> None:
             orientation_mode=args.darcy_orientation,
             orientation_blobs=args.darcy_orientation_blobs,
             orientation_sigma=args.darcy_orientation_sigma,
+            predict_flux=args.task == "darcy_holes_flux",
         )
     train_loader = DataLoader(
         train_data,

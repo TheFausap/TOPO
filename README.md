@@ -123,6 +123,7 @@ Available experiment names are:
 - `darcy_iid_none`
 - `darcy_blobs_none`
 - `darcy_holes_blobs_none`
+- `darcy_holes_flux_blobs_none`
 
 Check the runner on tiny settings first with:
 
@@ -145,6 +146,23 @@ For repeated seeds:
 
 ```bash
 .venv/bin/python scripts/run_experiments.py --experiments darcy_holes_blobs_none --seeds 7,8,9
+```
+
+## Multi-Rank Darcy Holes: Potential Plus Edge Flux
+
+The next fixed-complex task predicts both the vertex potential `u0` and an
+edge-supported flux/circulation target `u1`. The TNO decodes `u1` from hidden
+edge cochains; the vertex baseline decodes it from graph-gradient edge features.
+
+```bash
+.venv/bin/python train.py --task darcy_holes_flux --darcy-orientation blobs --darcy-vertex-projection none --model tno --epochs 100 --train-samples 512 --val-samples 128 --save outputs/tno_darcy_holes_flux_blobs_no_vertex_projection.pt
+.venv/bin/python train.py --task darcy_holes_flux --darcy-orientation blobs --darcy-vertex-projection none --model vertex --epochs 100 --train-samples 512 --val-samples 128 --save outputs/vertex_darcy_holes_flux_blobs_no_vertex_projection.pt
+```
+
+For repeated seeds:
+
+```bash
+.venv/bin/python scripts/run_experiments.py --experiments darcy_holes_flux_blobs_none --seeds 7,8,9
 ```
 
 ## Project Layout

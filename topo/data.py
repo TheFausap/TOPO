@@ -17,6 +17,7 @@ class PoissonSample:
     x1: torch.Tensor
     x2: torch.Tensor
     y0: torch.Tensor
+    y1: torch.Tensor | None = None
 
 
 class PoissonDataset(Dataset[PoissonSample]):
@@ -81,7 +82,10 @@ def poisson_collate(batch: list[PoissonSample]) -> tuple[torch.Tensor, ...]:
     x1 = torch.stack([item.x1 for item in batch], dim=0)
     x2 = torch.stack([item.x2 for item in batch], dim=0)
     y0 = torch.stack([item.y0 for item in batch], dim=0)
-    return x0, x1, x2, y0
+    y1 = None
+    if all(item.y1 is not None for item in batch):
+        y1 = torch.stack([item.y1 for item in batch if item.y1 is not None], dim=0)
+    return x0, x1, x2, y0, y1
 
 
 class AnisotropicDarcyDataset(Dataset[PoissonSample]):
@@ -317,9 +321,11 @@ class DarcyHolesDataset(AnisotropicDarcyDataset):
         orientation_sigma: float = 0.25,
         hole_value_low: float = 0.5,
         hole_value_high: float = 1.5,
+        predict_flux: bool = False,
     ) -> None:
         self.hole_value_low = hole_value_low
         self.hole_value_high = hole_value_high
+        self.predict_flux = predict_flux
         super().__init__(
             complex_=complex_,
             samples=samples,
@@ -362,6 +368,51 @@ class DarcyHolesDataset(AnisotropicDarcyDataset):
         )
         return u
 
+    def _edge_flux_target(
+        self,
+        u: np.ndarray,
+        kxx: np.ndarray,
+        kyy: np.ndarray,
+        kxy: np.ndarray,
+    ) -> np.ndarray:
+        flux_sum = np.zeros((self.complex.num_edges, 1), dtype=np.float32)
+        counts = np.zeros((self.complex.num_edges, 1), dtype=np.float32)
+        edge_to_index = {
+            (int(a), int(b)): eidx for eidx, (a, b) in enumerate(self.complex.edges)
+        }
+        for fidx, face in enumerate(self.complex.faces):
+            ids = [int(v) for v in face]
+            pts = self.vertex_xy[ids]
+            area = float(self.base_face_features[fidx, 2])
+            x0, y0 = pts[0]
+            x1, y1 = pts[1]
+            x2, y2 = pts[2]
+            grads = np.array(
+                [
+                    [y1 - y2, x2 - x1],
+                    [y2 - y0, x0 - x2],
+                    [y0 - y1, x1 - x0],
+                ],
+                dtype=np.float32,
+            ) / (2.0 * area)
+            grad_u = grads.T @ u[ids, 0]
+            tensor = np.array(
+                [
+                    [float(kxx[fidx, 0]), float(kxy[fidx, 0])],
+                    [float(kxy[fidx, 0]), float(kyy[fidx, 0])],
+                ],
+                dtype=np.float32,
+            )
+            flux = -(tensor @ grad_u)
+            for a, b in ((ids[0], ids[1]), (ids[1], ids[2]), (ids[2], ids[0])):
+                key = (a, b) if a < b else (b, a)
+                eidx = edge_to_index[key]
+                sign = 1.0 if (a, b) == key else -1.0
+                tangent = self.vertex_xy[key[1]] - self.vertex_xy[key[0]]
+                flux_sum[eidx, 0] += sign * float(flux @ tangent)
+                counts[eidx, 0] += 1.0
+        return flux_sum / np.maximum(counts, 1.0)
+
     def _make_sample(self) -> PoissonSample:
         for _ in range(self.max_sample_attempts):
             f = self._forcing()
@@ -392,9 +443,13 @@ class DarcyHolesDataset(AnisotropicDarcyDataset):
             [self.base_face_features, cos2, sin2, kxx, kyy, kxy],
             axis=1,
         ).astype(np.float32)
+        y1 = None
+        if self.predict_flux:
+            y1 = torch.from_numpy(self._edge_flux_target(u, kxx, kyy, kxy))
         return PoissonSample(
             x0=torch.from_numpy(x0),
             x1=torch.from_numpy(x1),
             x2=torch.from_numpy(x2),
             y0=torch.from_numpy(u),
+            y1=y1,
         )

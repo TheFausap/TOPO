@@ -153,7 +153,7 @@ def deduplicate_runs(runs: list[RunSummary]) -> list[RunSummary]:
 
 
 def describe_experiment(run: RunSummary) -> str:
-    if run.task not in {"darcy", "darcy_holes"}:
+    if run.task not in {"darcy", "darcy_holes", "darcy_holes_flux"}:
         return run.task
     projection = run.args.get("darcy_vertex_projection", "mean")
     orientation = run.args.get("darcy_orientation", "iid")
