@@ -134,6 +134,24 @@ def collect_runs(outputs_dir: Path, include_smoke: bool) -> list[RunSummary]:
     return runs
 
 
+def _run_rank(run: RunSummary) -> tuple[int, int, float]:
+    seed = run.args.get("seed", 7)
+    seed_named = f"seed{seed}" in run.path.stem
+    has_history = run.history_path is not None and run.history_path.exists()
+    return (int(seed_named), int(has_history), run.path.stat().st_mtime)
+
+
+def deduplicate_runs(runs: list[RunSummary]) -> list[RunSummary]:
+    """Keep one artifact for each exact experiment/model/seed combination."""
+    by_key: dict[tuple[Any, ...], RunSummary] = {}
+    for run in runs:
+        key = (*run.experiment_key, run.model)
+        current = by_key.get(key)
+        if current is None or _run_rank(run) > _run_rank(current):
+            by_key[key] = run
+    return sorted(by_key.values(), key=lambda run: (describe_experiment(run), run.model, run.path.name))
+
+
 def describe_experiment(run: RunSummary) -> str:
     if run.task != "darcy":
         return run.task
@@ -143,11 +161,13 @@ def describe_experiment(run: RunSummary) -> str:
 
 
 def make_markdown(runs: list[RunSummary]) -> str:
+    runs = deduplicate_runs(runs)
     lines = [
         "# Experiment Summary",
         "",
         "Generated from checkpoint metadata and, when present, `*.history.json` files.",
         "Lower relative L2 is better. Checkpoints are selected by aggregate validation relative L2.",
+        "Equivalent artifacts are deduplicated by experiment, model, and seed.",
         "",
         "## Runs",
         "",

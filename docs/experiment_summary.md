@@ -2,6 +2,7 @@
 
 Generated from checkpoint metadata and, when present, `*.history.json` files.
 Lower relative L2 is better. Checkpoints are selected by aggregate validation relative L2.
+Equivalent artifacts are deduplicated by experiment, model, and seed.
 
 ## Runs
 
@@ -10,11 +11,9 @@ Lower relative L2 is better. Checkpoints are selected by aggregate validation re
 | darcy/orientation=blobs/vertex_projection=none | tno | 0.1865 | 0.1870 | 0.2741 | 0.0736 | `outputs/darcy_blobs_none_tno_seed7.pt` |
 | darcy/orientation=blobs/vertex_projection=none | tno | 0.1825 | 0.1834 | 0.2915 | 0.0709 | `outputs/darcy_blobs_none_tno_seed8.pt` |
 | darcy/orientation=blobs/vertex_projection=none | tno | 0.1738 | 0.1824 | 0.3060 | 0.0661 | `outputs/darcy_blobs_none_tno_seed9.pt` |
-| darcy/orientation=blobs/vertex_projection=none | tno | 0.1865 | 0.1870 | 0.2741 | 0.0736 | `outputs/tno_darcy_blobs_no_vertex_projection.pt` |
 | darcy/orientation=blobs/vertex_projection=none | vertex | 0.2508 | 0.2594 | 0.3482 | 0.1417 | `outputs/darcy_blobs_none_vertex_seed7.pt` |
 | darcy/orientation=blobs/vertex_projection=none | vertex | 0.2459 | 0.2750 | 0.3895 | 0.1592 | `outputs/darcy_blobs_none_vertex_seed8.pt` |
 | darcy/orientation=blobs/vertex_projection=none | vertex | 0.2332 | 0.2374 | 0.3225 | 0.1121 | `outputs/darcy_blobs_none_vertex_seed9.pt` |
-| darcy/orientation=blobs/vertex_projection=none | vertex | 0.2508 | 0.2594 | 0.3482 | 0.1417 | `outputs/vertex_darcy_blobs_no_vertex_projection.pt` |
 | darcy/orientation=iid/vertex_projection=mean | tno | 0.2021 | n/a | n/a | n/a | `outputs/tno_darcy.pt` |
 | darcy/orientation=iid/vertex_projection=mean | vertex | 0.2183 | n/a | n/a | n/a | `outputs/vertex_darcy.pt` |
 | darcy/orientation=iid/vertex_projection=none | tno | 0.1847 | n/a | n/a | n/a | `outputs/tno_darcy_no_vertex_projection.pt` |
@@ -26,7 +25,7 @@ Lower relative L2 is better. Checkpoints are selected by aggregate validation re
 
 | Experiment | Seeds | TNO best mean | Vertex best mean | TNO improvement |
 |---|---:|---:|---:|---:|
-| darcy/orientation=blobs/vertex_projection=none | 7, 8, 9 | 0.1823 +/- 0.0060 | 0.2452 +/- 0.0083 | +25.6% |
+| darcy/orientation=blobs/vertex_projection=none | 7, 8, 9 | 0.1809 +/- 0.0065 | 0.2433 +/- 0.0091 | +25.6% |
 | darcy/orientation=iid/vertex_projection=mean | 7 | 0.2021 | 0.2183 | +7.4% |
 | darcy/orientation=iid/vertex_projection=none | 7 | 0.1847 | 0.1968 | +6.1% |
 | poisson | 7 | 0.1792 | 0.1988 | +9.8% |
