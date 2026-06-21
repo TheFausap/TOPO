@@ -47,6 +47,20 @@ The vertex baseline uses the same mesh and training loop, but only consumes
 vertex features and the graph Laplacian induced by `B1`. It ignores edge and
 face cochains.
 
+## Face-Native Anisotropic Darcy Task
+
+This task makes the coefficient field live naturally on faces. Each triangle gets
+a random anisotropic conductivity tensor orientation, the finite-element system is
+assembled with that face tensor, and the model predicts the vertex solution.
+
+The TNO receives the face tensor channels directly. The vertex baseline receives
+only a vertex-averaged projection of the same face orientation signal.
+
+```bash
+.venv/bin/python train.py --task darcy --model tno --epochs 100 --train-samples 512 --val-samples 128 --save outputs/tno_darcy.pt
+.venv/bin/python train.py --task darcy --model vertex --epochs 100 --train-samples 512 --val-samples 128 --save outputs/vertex_darcy.pt
+```
+
 ## Project Layout
 
 ```text

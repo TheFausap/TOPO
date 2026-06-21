@@ -10,7 +10,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from topo.complex import grid_complex
-from topo.data import PoissonDataset, poisson_collate
+from topo.data import AnisotropicDarcyDataset, PoissonDataset, poisson_collate
 from topo.dec import DECOperators
 from topo.tno import TopologicalNeuralOperator, VertexGraphOperator
 
@@ -29,6 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--model", choices=["tno", "vertex"], default="tno")
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--task", choices=["poisson", "darcy"], default="poisson")
     parser.add_argument("--save", type=Path, default=Path("outputs/tno_poisson.pt"))
     return parser.parse_args()
 
@@ -87,8 +88,9 @@ def main() -> None:
 
     complex_ = grid_complex(args.nx, args.ny)
     ops = DECOperators.from_complex(complex_, device=device)
-    train_data = PoissonDataset(complex_, args.train_samples, seed=args.seed)
-    val_data = PoissonDataset(complex_, args.val_samples, seed=args.seed + 1)
+    dataset_cls = PoissonDataset if args.task == "poisson" else AnisotropicDarcyDataset
+    train_data = dataset_cls(complex_, args.train_samples, seed=args.seed)
+    val_data = dataset_cls(complex_, args.val_samples, seed=args.seed + 1)
     train_loader = DataLoader(
         train_data,
         batch_size=args.batch_size,
@@ -102,18 +104,23 @@ def main() -> None:
         collate_fn=poisson_collate,
     )
 
+    sample = train_data[0]
+    vertex_in = sample.x0.shape[-1]
+    edge_in = sample.x1.shape[-1]
+    face_in = sample.x2.shape[-1]
+
     if args.model == "tno":
         model = TopologicalNeuralOperator(
-            vertex_in=4,
-            edge_in=3,
-            face_in=3,
+            vertex_in=vertex_in,
+            edge_in=edge_in,
+            face_in=face_in,
             hidden_dim=args.hidden_dim,
             layers=args.layers,
             dropout=args.dropout,
         ).to(device)
     else:
         model = VertexGraphOperator(
-            vertex_in=4,
+            vertex_in=vertex_in,
             hidden_dim=args.hidden_dim,
             layers=args.layers,
             dropout=args.dropout,
@@ -139,6 +146,7 @@ def main() -> None:
         print(
             f"epoch={epoch:03d} "
             f"model={args.model} "
+            f"task={args.task} "
             f"train_mse={train_loss:.6e} train_rel_l2={train_rel:.4f} "
             f"val_mse={val_loss:.6e} val_rel_l2={val_rel:.4f}"
         )
