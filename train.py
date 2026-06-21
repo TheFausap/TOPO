@@ -30,6 +30,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", choices=["tno", "vertex"], default="tno")
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--task", choices=["poisson", "darcy"], default="poisson")
+    parser.add_argument(
+        "--darcy-min-solution-norm",
+        type=float,
+        default=0.5,
+        help="Reject generated Darcy samples whose solution norm is below this value.",
+    )
     parser.add_argument("--save", type=Path, default=Path("outputs/tno_poisson.pt"))
     return parser.parse_args()
 
@@ -40,7 +46,7 @@ def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
 
 
-def relative_l2(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+def sample_relative_l2(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     numerator = torch.linalg.vector_norm(pred - target, dim=(-2, -1))
     denominator = torch.linalg.vector_norm(target, dim=(-2, -1)).clamp_min(1e-8)
     return (numerator / denominator).mean()
@@ -52,11 +58,13 @@ def run_epoch(
     loader: DataLoader,
     optimizer: torch.optim.Optimizer | None,
     device: torch.device,
-) -> tuple[float, float]:
+) -> tuple[float, float, float]:
     training = optimizer is not None
     model.train(training)
     total_loss = 0.0
-    total_rel = 0.0
+    total_sample_rel = 0.0
+    total_error_sq = 0.0
+    total_target_sq = 0.0
     total_items = 0
 
     for x0, x1, x2, y0 in loader:
@@ -75,10 +83,13 @@ def run_epoch(
 
         batch = x0.shape[0]
         total_loss += float(loss.detach()) * batch
-        total_rel += float(relative_l2(pred.detach(), y0)) * batch
+        total_sample_rel += float(sample_relative_l2(pred.detach(), y0)) * batch
+        total_error_sq += float(torch.sum((pred.detach() - y0) ** 2))
+        total_target_sq += float(torch.sum(y0**2))
         total_items += batch
 
-    return total_loss / total_items, total_rel / total_items
+    aggregate_rel = math.sqrt(total_error_sq / max(total_target_sq, 1e-12))
+    return total_loss / total_items, total_sample_rel / total_items, aggregate_rel
 
 
 def main() -> None:
@@ -88,9 +99,22 @@ def main() -> None:
 
     complex_ = grid_complex(args.nx, args.ny)
     ops = DECOperators.from_complex(complex_, device=device)
-    dataset_cls = PoissonDataset if args.task == "poisson" else AnisotropicDarcyDataset
-    train_data = dataset_cls(complex_, args.train_samples, seed=args.seed)
-    val_data = dataset_cls(complex_, args.val_samples, seed=args.seed + 1)
+    if args.task == "poisson":
+        train_data = PoissonDataset(complex_, args.train_samples, seed=args.seed)
+        val_data = PoissonDataset(complex_, args.val_samples, seed=args.seed + 1)
+    else:
+        train_data = AnisotropicDarcyDataset(
+            complex_,
+            args.train_samples,
+            seed=args.seed,
+            min_solution_norm=args.darcy_min_solution_norm,
+        )
+        val_data = AnisotropicDarcyDataset(
+            complex_,
+            args.val_samples,
+            seed=args.seed + 1,
+            min_solution_norm=args.darcy_min_solution_norm,
+        )
     train_loader = DataLoader(
         train_data,
         batch_size=args.batch_size,
@@ -130,9 +154,11 @@ def main() -> None:
     best_val = math.inf
     args.save.parent.mkdir(parents=True, exist_ok=True)
     for epoch in range(1, args.epochs + 1):
-        train_loss, train_rel = run_epoch(model, ops, train_loader, optimizer, device)
+        train_loss, train_sample_rel, train_rel = run_epoch(
+            model, ops, train_loader, optimizer, device
+        )
         with torch.no_grad():
-            val_loss, val_rel = run_epoch(model, ops, val_loader, None, device)
+            val_loss, val_sample_rel, val_rel = run_epoch(model, ops, val_loader, None, device)
         if val_rel < best_val:
             best_val = val_rel
             torch.save(
@@ -140,6 +166,7 @@ def main() -> None:
                     "model": model.state_dict(),
                     "args": vars(args),
                     "best_val_relative_l2": best_val,
+                    "metric": "aggregate_relative_l2",
                 },
                 args.save,
             )
@@ -148,7 +175,9 @@ def main() -> None:
             f"model={args.model} "
             f"task={args.task} "
             f"train_mse={train_loss:.6e} train_rel_l2={train_rel:.4f} "
-            f"val_mse={val_loss:.6e} val_rel_l2={val_rel:.4f}"
+            f"train_sample_rel_l2={train_sample_rel:.4f} "
+            f"val_mse={val_loss:.6e} val_rel_l2={val_rel:.4f} "
+            f"val_sample_rel_l2={val_sample_rel:.4f}"
         )
 
     print(f"best_val_relative_l2={best_val:.4f}")

@@ -47,6 +47,14 @@ The vertex baseline uses the same mesh and training loop, but only consumes
 vertex features and the graph Laplacian induced by `B1`. It ignores edge and
 face cochains.
 
+Training reports two relative errors:
+
+- `*_rel_l2`: aggregate relative L2, `sqrt(sum ||error||^2 / sum ||target||^2)`.
+- `*_sample_rel_l2`: mean of per-sample relative L2 values.
+
+Checkpoints are selected with aggregate relative L2 because per-sample relative
+errors become unstable when a generated target field has a tiny norm.
+
 ## Face-Native Anisotropic Darcy Task
 
 This task makes the coefficient field live naturally on faces. Each triangle gets
@@ -60,6 +68,10 @@ only a vertex-averaged projection of the same face orientation signal.
 .venv/bin/python train.py --task darcy --model tno --epochs 100 --train-samples 512 --val-samples 128 --save outputs/tno_darcy.pt
 .venv/bin/python train.py --task darcy --model vertex --epochs 100 --train-samples 512 --val-samples 128 --save outputs/vertex_darcy.pt
 ```
+
+By default, Darcy samples with solution norm below `0.5` are rejected to avoid
+near-zero targets dominating `sample_rel_l2`. You can change this with
+`--darcy-min-solution-norm`.
 
 ## Project Layout
 
