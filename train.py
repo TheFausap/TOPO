@@ -42,6 +42,24 @@ def parse_args() -> argparse.Namespace:
         default="mean",
         help="How face orientation channels are projected into Darcy vertex inputs.",
     )
+    parser.add_argument(
+        "--darcy-orientation",
+        choices=["iid", "blobs"],
+        default="iid",
+        help="How per-face Darcy conductivity orientations are generated.",
+    )
+    parser.add_argument(
+        "--darcy-orientation-blobs",
+        type=int,
+        default=4,
+        help="Number of smooth orientation blobs used when --darcy-orientation=blobs.",
+    )
+    parser.add_argument(
+        "--darcy-orientation-sigma",
+        type=float,
+        default=0.25,
+        help="Gaussian width for smooth orientation blobs.",
+    )
     parser.add_argument("--save", type=Path, default=Path("outputs/tno_poisson.pt"))
     return parser.parse_args()
 
@@ -115,6 +133,9 @@ def main() -> None:
             seed=args.seed,
             min_solution_norm=args.darcy_min_solution_norm,
             vertex_projection=args.darcy_vertex_projection,
+            orientation_mode=args.darcy_orientation,
+            orientation_blobs=args.darcy_orientation_blobs,
+            orientation_sigma=args.darcy_orientation_sigma,
         )
         val_data = AnisotropicDarcyDataset(
             complex_,
@@ -122,6 +143,9 @@ def main() -> None:
             seed=args.seed + 1,
             min_solution_norm=args.darcy_min_solution_norm,
             vertex_projection=args.darcy_vertex_projection,
+            orientation_mode=args.darcy_orientation,
+            orientation_blobs=args.darcy_orientation_blobs,
+            orientation_sigma=args.darcy_orientation_sigma,
         )
     train_loader = DataLoader(
         train_data,

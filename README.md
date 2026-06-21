@@ -81,6 +81,14 @@ a projected face-orientation shortcut, disable the Darcy vertex projection:
 .venv/bin/python train.py --task darcy --darcy-vertex-projection none --model vertex --epochs 100 --train-samples 512 --val-samples 128 --save outputs/vertex_darcy_no_vertex_projection.pt
 ```
 
+The default orientation field is iid per face. To test smoother, spatially
+coherent conductivity structure, use Gaussian orientation blobs:
+
+```bash
+.venv/bin/python train.py --task darcy --darcy-orientation blobs --darcy-vertex-projection none --model tno --epochs 100 --train-samples 512 --val-samples 128 --save outputs/tno_darcy_blobs_no_vertex_projection.pt
+.venv/bin/python train.py --task darcy --darcy-orientation blobs --darcy-vertex-projection none --model vertex --epochs 100 --train-samples 512 --val-samples 128 --save outputs/vertex_darcy_blobs_no_vertex_projection.pt
+```
+
 ## Project Layout
 
 ```text

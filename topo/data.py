@@ -97,9 +97,16 @@ class AnisotropicDarcyDataset(Dataset[PoissonSample]):
         min_solution_norm: float = 0.5,
         max_sample_attempts: int = 100,
         vertex_projection: str = "mean",
+        orientation_mode: str = "iid",
+        orientation_blobs: int = 4,
+        orientation_sigma: float = 0.25,
     ) -> None:
         if vertex_projection not in {"mean", "none"}:
             raise ValueError("vertex_projection must be 'mean' or 'none'")
+        if orientation_mode not in {"iid", "blobs"}:
+            raise ValueError("orientation_mode must be 'iid' or 'blobs'")
+        if orientation_blobs < 1:
+            raise ValueError("orientation_blobs must be at least 1")
         self.complex = complex_
         self.samples = samples
         self.rng = np.random.default_rng(seed)
@@ -108,6 +115,9 @@ class AnisotropicDarcyDataset(Dataset[PoissonSample]):
         self.min_solution_norm = min_solution_norm
         self.max_sample_attempts = max_sample_attempts
         self.vertex_projection = vertex_projection
+        self.orientation_mode = orientation_mode
+        self.orientation_blobs = orientation_blobs
+        self.orientation_sigma = orientation_sigma
         self.vertex_xy = complex_.vertices.astype(np.float32)
         self.boundary = complex_.boundary_vertices.astype(np.float32)[:, None]
         self.interior = ~complex_.boundary_vertices
@@ -151,8 +161,30 @@ class AnisotropicDarcyDataset(Dataset[PoissonSample]):
         f[self.complex.boundary_vertices] = 0.0
         return f
 
+    def _orientation_angles(self) -> np.ndarray:
+        if self.orientation_mode == "iid":
+            return self.rng.uniform(0.0, np.pi, size=(self.complex.num_faces, 1)).astype(
+                np.float32
+            )
+
+        centroids = self.base_face_features[:, :2]
+        field = np.zeros((self.complex.num_faces, 2), dtype=np.float32)
+        base_angle = float(self.rng.uniform(0.0, 2.0 * np.pi))
+        field += 0.15 * np.array([np.cos(base_angle), np.sin(base_angle)], dtype=np.float32)
+        for _ in range(self.orientation_blobs):
+            center = self.rng.uniform(0.1, 0.9, size=(1, 2)).astype(np.float32)
+            angle = float(self.rng.uniform(0.0, 2.0 * np.pi))
+            amplitude = float(self.rng.uniform(0.5, 1.5))
+            dist2 = np.sum((centroids - center) ** 2, axis=1, keepdims=True)
+            weight = np.exp(-dist2 / (2.0 * self.orientation_sigma**2)).astype(np.float32)
+            direction = np.array([np.cos(angle), np.sin(angle)], dtype=np.float32)
+            field += amplitude * weight * direction
+        return (0.5 * np.mod(np.arctan2(field[:, 1:2], field[:, 0:1]), 2.0 * np.pi)).astype(
+            np.float32
+        )
+
     def _conductivity(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        phi = self.rng.uniform(0.0, np.pi, size=(self.complex.num_faces, 1)).astype(np.float32)
+        phi = self._orientation_angles()
         cos_phi = np.cos(phi)
         sin_phi = np.sin(phi)
         cos2 = np.cos(2.0 * phi).astype(np.float32)
