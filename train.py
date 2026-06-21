@@ -36,6 +36,12 @@ def parse_args() -> argparse.Namespace:
         default=0.5,
         help="Reject generated Darcy samples whose solution norm is below this value.",
     )
+    parser.add_argument(
+        "--darcy-vertex-projection",
+        choices=["mean", "none"],
+        default="mean",
+        help="How face orientation channels are projected into Darcy vertex inputs.",
+    )
     parser.add_argument("--save", type=Path, default=Path("outputs/tno_poisson.pt"))
     return parser.parse_args()
 
@@ -108,12 +114,14 @@ def main() -> None:
             args.train_samples,
             seed=args.seed,
             min_solution_norm=args.darcy_min_solution_norm,
+            vertex_projection=args.darcy_vertex_projection,
         )
         val_data = AnisotropicDarcyDataset(
             complex_,
             args.val_samples,
             seed=args.seed + 1,
             min_solution_norm=args.darcy_min_solution_norm,
+            vertex_projection=args.darcy_vertex_projection,
         )
     train_loader = DataLoader(
         train_data,

@@ -96,7 +96,10 @@ class AnisotropicDarcyDataset(Dataset[PoissonSample]):
         k_perp: float = 1.0,
         min_solution_norm: float = 0.5,
         max_sample_attempts: int = 100,
+        vertex_projection: str = "mean",
     ) -> None:
+        if vertex_projection not in {"mean", "none"}:
+            raise ValueError("vertex_projection must be 'mean' or 'none'")
         self.complex = complex_
         self.samples = samples
         self.rng = np.random.default_rng(seed)
@@ -104,6 +107,7 @@ class AnisotropicDarcyDataset(Dataset[PoissonSample]):
         self.k_perp = k_perp
         self.min_solution_norm = min_solution_norm
         self.max_sample_attempts = max_sample_attempts
+        self.vertex_projection = vertex_projection
         self.vertex_xy = complex_.vertices.astype(np.float32)
         self.boundary = complex_.boundary_vertices.astype(np.float32)[:, None]
         self.interior = ~complex_.boundary_vertices
@@ -236,12 +240,11 @@ class AnisotropicDarcyDataset(Dataset[PoissonSample]):
                 "Lower min_solution_norm or increase max_sample_attempts."
             )
         face_orientation = np.concatenate([cos2, sin2], axis=1)
-        vertex_orientation = self._project_faces_to_vertices(face_orientation)
         edge_orientation = self._project_faces_to_edges(face_orientation)
-        x0 = np.concatenate(
-            [f, self.vertex_xy, self.boundary, vertex_orientation],
-            axis=1,
-        ).astype(np.float32)
+        x0_parts = [f, self.vertex_xy, self.boundary]
+        if self.vertex_projection == "mean":
+            x0_parts.append(self._project_faces_to_vertices(face_orientation))
+        x0 = np.concatenate(x0_parts, axis=1).astype(np.float32)
         x1 = np.concatenate([self.base_edge_features, edge_orientation], axis=1).astype(np.float32)
         x2 = np.concatenate(
             [self.base_face_features, cos2, sin2, kxx, kyy, kxy],

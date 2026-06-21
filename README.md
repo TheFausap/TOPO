@@ -73,6 +73,14 @@ By default, Darcy samples with solution norm below `0.5` are rejected to avoid
 near-zero targets dominating `sample_rel_l2`. You can change this with
 `--darcy-min-solution-norm`.
 
+To test whether native face cochains help when the vertex baseline does not get
+a projected face-orientation shortcut, disable the Darcy vertex projection:
+
+```bash
+.venv/bin/python train.py --task darcy --darcy-vertex-projection none --model tno --epochs 100 --train-samples 512 --val-samples 128 --save outputs/tno_darcy_no_vertex_projection.pt
+.venv/bin/python train.py --task darcy --darcy-vertex-projection none --model vertex --epochs 100 --train-samples 512 --val-samples 128 --save outputs/vertex_darcy_no_vertex_projection.pt
+```
+
 ## Project Layout
 
 ```text
