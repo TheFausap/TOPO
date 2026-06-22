@@ -5,6 +5,7 @@ import json
 import math
 import random
 from pathlib import Path
+from typing import Sequence
 
 import numpy as np
 import torch
@@ -18,6 +19,16 @@ from topo.complex import (
 from topo.data import AnisotropicDarcyDataset, DarcyHolesDataset, PoissonDataset, poisson_collate
 from topo.dec import DECOperators
 from topo.tno import TopologicalNeuralOperator, VertexGraphOperator
+
+
+def parse_csv_ints(value: str) -> list[int]:
+    try:
+        parsed = [int(part.strip()) for part in value.split(",") if part.strip()]
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("expected comma-separated integers") from exc
+    if not parsed:
+        raise argparse.ArgumentTypeError("expected at least one integer")
+    return parsed
 
 
 def parse_args() -> argparse.Namespace:
@@ -49,8 +60,22 @@ def parse_args() -> argparse.Namespace:
             "darcy_holes_flux",
             "darcy_holes_tri",
             "darcy_holes_tri_flux",
+            "darcy_holes_tri_meshes",
+            "darcy_holes_tri_meshes_flux",
         ],
         default="poisson",
+    )
+    parser.add_argument(
+        "--train-mesh-seeds",
+        type=parse_csv_ints,
+        default=[0, 1, 2, 3],
+        help="Comma-separated triangulation seeds for variable-mesh training tasks.",
+    )
+    parser.add_argument(
+        "--val-mesh-seeds",
+        type=parse_csv_ints,
+        default=[100, 101],
+        help="Comma-separated held-out triangulation seeds for variable-mesh validation tasks.",
     )
     parser.add_argument(
         "--darcy-min-solution-norm",
@@ -110,11 +135,35 @@ def apply_task_defaults(args: argparse.Namespace) -> None:
         "darcy_holes_flux",
         "darcy_holes_tri",
         "darcy_holes_tri_flux",
+        "darcy_holes_tri_meshes",
+        "darcy_holes_tri_meshes_flux",
     }
     if args.darcy_vertex_projection is None:
         args.darcy_vertex_projection = "none" if args.task in holed_tasks else "mean"
     if args.darcy_orientation is None:
         args.darcy_orientation = "blobs" if args.task in holed_tasks else "iid"
+
+
+def is_flux_task(task: str) -> bool:
+    return task in {
+        "darcy_holes_flux",
+        "darcy_holes_tri_flux",
+        "darcy_holes_tri_meshes_flux",
+    }
+
+
+def is_multi_mesh_task(task: str) -> bool:
+    return task in {"darcy_holes_tri_meshes", "darcy_holes_tri_meshes_flux"}
+
+
+def split_sample_budget(total: int, parts: int) -> list[int]:
+    if parts < 1:
+        raise ValueError("parts must be positive")
+    if total < parts:
+        raise ValueError("sample budget must be at least the number of meshes")
+    base = total // parts
+    remainder = total % parts
+    return [base + int(index < remainder) for index in range(parts)]
 
 
 def sample_relative_l2(
@@ -135,8 +184,7 @@ def sample_relative_l2(
 
 def run_epoch(
     model: TopologicalNeuralOperator,
-    ops: DECOperators,
-    loader: DataLoader,
+    op_loaders: Sequence[tuple[DECOperators, DataLoader]],
     optimizer: torch.optim.Optimizer | None,
     device: torch.device,
 ) -> tuple[float, float, float]:
@@ -148,48 +196,85 @@ def run_epoch(
     total_target_sq = 0.0
     total_items = 0
 
-    for x0, x1, x2, y0, y1 in loader:
-        x0 = x0.to(device)
-        x1 = x1.to(device)
-        x2 = x2.to(device)
-        y0 = y0.to(device)
-        y1 = y1.to(device) if y1 is not None else None
-        if training:
-            optimizer.zero_grad(set_to_none=True)
-        output = model(ops, x0, x1, x2, return_edges=y1 is not None)
-        if y1 is None:
-            pred = output
-            pred_edge = None
-            loss = torch.nn.functional.mse_loss(pred, y0)
-        else:
-            pred, pred_edge = output
-            loss = torch.nn.functional.mse_loss(pred, y0) + torch.nn.functional.mse_loss(
-                pred_edge, y1
-            )
-        if training:
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
+    for ops, loader in op_loaders:
+        for x0, x1, x2, y0, y1 in loader:
+            x0 = x0.to(device)
+            x1 = x1.to(device)
+            x2 = x2.to(device)
+            y0 = y0.to(device)
+            y1 = y1.to(device) if y1 is not None else None
+            if training:
+                optimizer.zero_grad(set_to_none=True)
+            output = model(ops, x0, x1, x2, return_edges=y1 is not None)
+            if y1 is None:
+                pred = output
+                pred_edge = None
+                loss = torch.nn.functional.mse_loss(pred, y0)
+            else:
+                pred, pred_edge = output
+                loss = torch.nn.functional.mse_loss(pred, y0) + torch.nn.functional.mse_loss(
+                    pred_edge, y1
+                )
+            if training:
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
 
-        batch = x0.shape[0]
-        total_loss += float(loss.detach()) * batch
-        total_sample_rel += float(
-            sample_relative_l2(
-                pred.detach(),
-                y0,
-                pred_edge.detach() if pred_edge is not None else None,
-                y1,
-            )
-        ) * batch
-        total_error_sq += float(torch.sum((pred.detach() - y0) ** 2))
-        total_target_sq += float(torch.sum(y0**2))
-        if pred_edge is not None and y1 is not None:
-            total_error_sq += float(torch.sum((pred_edge.detach() - y1) ** 2))
-            total_target_sq += float(torch.sum(y1**2))
-        total_items += batch
+            batch = x0.shape[0]
+            total_loss += float(loss.detach()) * batch
+            total_sample_rel += float(
+                sample_relative_l2(
+                    pred.detach(),
+                    y0,
+                    pred_edge.detach() if pred_edge is not None else None,
+                    y1,
+                )
+            ) * batch
+            total_error_sq += float(torch.sum((pred.detach() - y0) ** 2))
+            total_target_sq += float(torch.sum(y0**2))
+            if pred_edge is not None and y1 is not None:
+                total_error_sq += float(torch.sum((pred_edge.detach() - y1) ** 2))
+                total_target_sq += float(torch.sum(y1**2))
+            total_items += batch
 
     aggregate_rel = math.sqrt(total_error_sq / max(total_target_sq, 1e-12))
     return total_loss / total_items, total_sample_rel / total_items, aggregate_rel
+
+
+def darcy_holes_dataset(
+    args: argparse.Namespace,
+    complex_,
+    samples: int,
+    seed: int,
+) -> DarcyHolesDataset:
+    return DarcyHolesDataset(
+        complex_,
+        samples,
+        seed=seed,
+        min_solution_norm=args.darcy_min_solution_norm,
+        vertex_projection=args.darcy_vertex_projection,
+        orientation_mode=args.darcy_orientation,
+        orientation_blobs=args.darcy_orientation_blobs,
+        orientation_sigma=args.darcy_orientation_sigma,
+        predict_flux=is_flux_task(args.task),
+    )
+
+
+def loader_for_dataset(
+    dataset,
+    batch_size: int,
+    shuffle: bool,
+    seed: int,
+) -> DataLoader:
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        collate_fn=poisson_collate,
+        generator=generator,
+    )
 
 
 def main() -> None:
@@ -199,74 +284,87 @@ def main() -> None:
     device = torch.device("cpu")
     run_args = jsonable_args(args)
 
-    if args.task in {"darcy_holes", "darcy_holes_flux"}:
-        complex_ = grid_complex_with_holes(args.nx, args.ny)
-    elif args.task in {"darcy_holes_tri", "darcy_holes_tri_flux"}:
-        complex_ = triangulated_square_with_holes(args.nx, args.ny)
+    if is_multi_mesh_task(args.task):
+        train_counts = split_sample_budget(args.train_samples, len(args.train_mesh_seeds))
+        val_counts = split_sample_budget(args.val_samples, len(args.val_mesh_seeds))
+        train_datasets = []
+        val_datasets = []
+        train_op_loaders = []
+        val_op_loaders = []
+        for index, (mesh_seed, samples) in enumerate(zip(args.train_mesh_seeds, train_counts)):
+            complex_ = triangulated_square_with_holes(args.nx, args.ny, seed=mesh_seed)
+            dataset = darcy_holes_dataset(args, complex_, samples, seed=args.seed + 1000 * index)
+            train_datasets.append(dataset)
+            train_op_loaders.append(
+                (
+                    DECOperators.from_complex(complex_, device=device),
+                    loader_for_dataset(dataset, args.batch_size, True, args.seed + index),
+                )
+            )
+        for index, (mesh_seed, samples) in enumerate(zip(args.val_mesh_seeds, val_counts)):
+            complex_ = triangulated_square_with_holes(args.nx, args.ny, seed=mesh_seed)
+            dataset = darcy_holes_dataset(
+                args,
+                complex_,
+                samples,
+                seed=args.seed + 1 + 1000 * index,
+            )
+            val_datasets.append(dataset)
+            val_op_loaders.append(
+                (
+                    DECOperators.from_complex(complex_, device=device),
+                    loader_for_dataset(dataset, args.batch_size, False, args.seed + 100 + index),
+                )
+            )
+        sample = train_datasets[0][0]
     else:
-        complex_ = grid_complex(args.nx, args.ny)
-    ops = DECOperators.from_complex(complex_, device=device)
-    if args.task == "poisson":
-        train_data = PoissonDataset(complex_, args.train_samples, seed=args.seed)
-        val_data = PoissonDataset(complex_, args.val_samples, seed=args.seed + 1)
-    elif args.task == "darcy":
-        train_data = AnisotropicDarcyDataset(
-            complex_,
-            args.train_samples,
-            seed=args.seed,
-            min_solution_norm=args.darcy_min_solution_norm,
-            vertex_projection=args.darcy_vertex_projection,
-            orientation_mode=args.darcy_orientation,
-            orientation_blobs=args.darcy_orientation_blobs,
-            orientation_sigma=args.darcy_orientation_sigma,
-        )
-        val_data = AnisotropicDarcyDataset(
-            complex_,
-            args.val_samples,
-            seed=args.seed + 1,
-            min_solution_norm=args.darcy_min_solution_norm,
-            vertex_projection=args.darcy_vertex_projection,
-            orientation_mode=args.darcy_orientation,
-            orientation_blobs=args.darcy_orientation_blobs,
-            orientation_sigma=args.darcy_orientation_sigma,
-        )
-    else:
-        train_data = DarcyHolesDataset(
-            complex_,
-            args.train_samples,
-            seed=args.seed,
-            min_solution_norm=args.darcy_min_solution_norm,
-            vertex_projection=args.darcy_vertex_projection,
-            orientation_mode=args.darcy_orientation,
-            orientation_blobs=args.darcy_orientation_blobs,
-            orientation_sigma=args.darcy_orientation_sigma,
-            predict_flux=args.task in {"darcy_holes_flux", "darcy_holes_tri_flux"},
-        )
-        val_data = DarcyHolesDataset(
-            complex_,
-            args.val_samples,
-            seed=args.seed + 1,
-            min_solution_norm=args.darcy_min_solution_norm,
-            vertex_projection=args.darcy_vertex_projection,
-            orientation_mode=args.darcy_orientation,
-            orientation_blobs=args.darcy_orientation_blobs,
-            orientation_sigma=args.darcy_orientation_sigma,
-            predict_flux=args.task in {"darcy_holes_flux", "darcy_holes_tri_flux"},
-        )
-    train_loader = DataLoader(
-        train_data,
-        batch_size=args.batch_size,
-        shuffle=True,
-        collate_fn=poisson_collate,
-    )
-    val_loader = DataLoader(
-        val_data,
-        batch_size=args.batch_size,
-        shuffle=False,
-        collate_fn=poisson_collate,
-    )
-
-    sample = train_data[0]
+        if args.task in {"darcy_holes", "darcy_holes_flux"}:
+            complex_ = grid_complex_with_holes(args.nx, args.ny)
+        elif args.task in {"darcy_holes_tri", "darcy_holes_tri_flux"}:
+            complex_ = triangulated_square_with_holes(args.nx, args.ny)
+        else:
+            complex_ = grid_complex(args.nx, args.ny)
+        ops = DECOperators.from_complex(complex_, device=device)
+        if args.task == "poisson":
+            train_data = PoissonDataset(complex_, args.train_samples, seed=args.seed)
+            val_data = PoissonDataset(complex_, args.val_samples, seed=args.seed + 1)
+        elif args.task == "darcy":
+            train_data = AnisotropicDarcyDataset(
+                complex_,
+                args.train_samples,
+                seed=args.seed,
+                min_solution_norm=args.darcy_min_solution_norm,
+                vertex_projection=args.darcy_vertex_projection,
+                orientation_mode=args.darcy_orientation,
+                orientation_blobs=args.darcy_orientation_blobs,
+                orientation_sigma=args.darcy_orientation_sigma,
+            )
+            val_data = AnisotropicDarcyDataset(
+                complex_,
+                args.val_samples,
+                seed=args.seed + 1,
+                min_solution_norm=args.darcy_min_solution_norm,
+                vertex_projection=args.darcy_vertex_projection,
+                orientation_mode=args.darcy_orientation,
+                orientation_blobs=args.darcy_orientation_blobs,
+                orientation_sigma=args.darcy_orientation_sigma,
+            )
+        else:
+            train_data = darcy_holes_dataset(args, complex_, args.train_samples, seed=args.seed)
+            val_data = darcy_holes_dataset(args, complex_, args.val_samples, seed=args.seed + 1)
+        train_op_loaders = [
+            (
+                ops,
+                loader_for_dataset(train_data, args.batch_size, True, args.seed),
+            )
+        ]
+        val_op_loaders = [
+            (
+                ops,
+                loader_for_dataset(val_data, args.batch_size, False, args.seed + 1),
+            )
+        ]
+        sample = train_data[0]
     vertex_in = sample.x0.shape[-1]
     edge_in = sample.x1.shape[-1]
     face_in = sample.x2.shape[-1]
@@ -296,10 +394,12 @@ def main() -> None:
     history: list[dict[str, float | int | str]] = []
     for epoch in range(1, args.epochs + 1):
         train_loss, train_sample_rel, train_rel = run_epoch(
-            model, ops, train_loader, optimizer, device
+            model, train_op_loaders, optimizer, device
         )
         with torch.no_grad():
-            val_loss, val_sample_rel, val_rel = run_epoch(model, ops, val_loader, None, device)
+            val_loss, val_sample_rel, val_rel = run_epoch(
+                model, val_op_loaders, None, device
+            )
         is_best = val_rel < best_val
         record = {
             "epoch": epoch,

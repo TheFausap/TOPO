@@ -126,6 +126,7 @@ Available experiment names are:
 - `darcy_holes_flux_blobs_none`
 - `darcy_holes_tri_blobs_none`
 - `darcy_holes_tri_flux_blobs_none`
+- `darcy_holes_tri_meshes_flux_blobs_none`
 
 Check the runner on tiny settings first with:
 
@@ -189,6 +190,27 @@ For a quick smoke check:
 
 ```bash
 .venv/bin/python scripts/run_experiments.py --quick --experiments darcy_holes_tri_flux_blobs_none --seeds 1 --overwrite
+```
+
+## Held-Out Irregular Mesh Generalization
+
+The variable-mesh bridge trains one shared model across several fixed irregular
+triangulations, then validates on held-out triangulation seeds. Batches still
+come from one mesh at a time, so the DEC operators remain exact for each mesh
+without requiring padding or block-diagonal batching.
+
+```bash
+.venv/bin/python train.py --task darcy_holes_tri_meshes_flux --model tno --epochs 100 --train-samples 512 --val-samples 128 --save outputs/tno_darcy_holes_tri_meshes_flux_blobs_no_vertex_projection.pt
+.venv/bin/python train.py --task darcy_holes_tri_meshes_flux --model vertex --epochs 100 --train-samples 512 --val-samples 128 --save outputs/vertex_darcy_holes_tri_meshes_flux_blobs_no_vertex_projection.pt
+```
+
+By default, this trains on mesh seeds `0,1,2,3` and validates on held-out seeds
+`100,101`. Override those sets with `--train-mesh-seeds` and `--val-mesh-seeds`.
+
+For repeated model/data seeds:
+
+```bash
+.venv/bin/python scripts/run_experiments.py --experiments darcy_holes_tri_meshes_flux_blobs_none --seeds 7,8,9
 ```
 
 ## TNO Route Ablations

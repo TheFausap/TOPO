@@ -36,6 +36,8 @@ class RunSummary:
             self.args.get("darcy_orientation_blobs", 4),
             self.args.get("darcy_orientation_sigma", 0.25),
             self.args.get("darcy_min_solution_norm", 0.5),
+            tuple(self.args.get("train_mesh_seeds", [])),
+            tuple(self.args.get("val_mesh_seeds", [])),
             self.args.get("tno_ablation", "full"),
         )
 
@@ -52,6 +54,8 @@ class RunSummary:
             self.args.get("darcy_orientation_blobs", 4),
             self.args.get("darcy_orientation_sigma", 0.25),
             self.args.get("darcy_min_solution_norm", 0.5),
+            tuple(self.args.get("train_mesh_seeds", [])),
+            tuple(self.args.get("val_mesh_seeds", [])),
             self.args.get("tno_ablation", "full"),
         )
 
@@ -68,6 +72,8 @@ class RunSummary:
             self.args.get("darcy_orientation_blobs", 4),
             self.args.get("darcy_orientation_sigma", 0.25),
             self.args.get("darcy_min_solution_norm", 0.5),
+            tuple(self.args.get("train_mesh_seeds", [])),
+            tuple(self.args.get("val_mesh_seeds", [])),
         )
 
 
@@ -176,6 +182,8 @@ def describe_experiment(run: RunSummary) -> str:
         "darcy_holes_flux",
         "darcy_holes_tri",
         "darcy_holes_tri_flux",
+        "darcy_holes_tri_meshes",
+        "darcy_holes_tri_meshes_flux",
     }:
         base = run.task
     else:
@@ -371,6 +379,7 @@ def make_markdown(runs: list[RunSummary]) -> str:
             "- Route ablations on the multi-rank holed Darcy task identify vertex-to-edge transport as the dominant edge-flux pathway.",
             "- Face-to-edge transport is also important, while the edge Laplacian route provides a smaller but measurable gain.",
             "- The irregular triangulated holed flux task preserves a large TNO advantage, supporting the move toward variable-mesh generalization.",
+            "- The multi-mesh triangulated task trains on several irregular meshes and validates on held-out mesh seeds.",
             "",
         ]
     )
