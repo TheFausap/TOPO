@@ -24,8 +24,16 @@ class CellMLP(nn.Module):
 class TNOLayer(nn.Module):
     """One residual rigid-DEC TNO layer over 0-, 1-, and 2-cochains."""
 
-    def __init__(self, hidden_dim: int, dropout: float = 0.0) -> None:
+    def __init__(
+        self,
+        hidden_dim: int,
+        dropout: float = 0.0,
+        ablation: str = "full",
+    ) -> None:
         super().__init__()
+        if ablation not in {"full", "no_face_to_edge", "no_vertex_to_edge", "no_edge_laplacian"}:
+            raise ValueError(f"unknown TNO ablation: {ablation}")
+        self.ablation = ablation
         self.vertex_update = CellMLP(3 * hidden_dim, hidden_dim, dropout)
         self.edge_update = CellMLP(5 * hidden_dim, hidden_dim, dropout)
         self.face_update = CellMLP(3 * hidden_dim, hidden_dim, dropout)
@@ -38,8 +46,19 @@ class TNOLayer(nn.Module):
         h2: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         v_msg = torch.cat([h0, ops.delta1(h1), ops.lap0(h0)], dim=-1)
+        vertex_to_edge = ops.d0(h0)
+        face_to_edge = ops.delta2(h2)
+        edge_lap_down = ops.lap1_down(h1)
+        edge_lap_up = ops.lap1_up(h1)
+        if self.ablation == "no_vertex_to_edge":
+            vertex_to_edge = torch.zeros_like(vertex_to_edge)
+        if self.ablation == "no_face_to_edge":
+            face_to_edge = torch.zeros_like(face_to_edge)
+        if self.ablation == "no_edge_laplacian":
+            edge_lap_down = torch.zeros_like(edge_lap_down)
+            edge_lap_up = torch.zeros_like(edge_lap_up)
         e_msg = torch.cat(
-            [h1, ops.d0(h0), ops.delta2(h2), ops.lap1_down(h1), ops.lap1_up(h1)],
+            [h1, vertex_to_edge, face_to_edge, edge_lap_down, edge_lap_up],
             dim=-1,
         )
         f_msg = torch.cat([h2, ops.d1(h1), ops.lap2(h2)], dim=-1)
@@ -61,13 +80,17 @@ class TopologicalNeuralOperator(nn.Module):
         hidden_dim: int = 64,
         layers: int = 4,
         dropout: float = 0.0,
+        ablation: str = "full",
     ) -> None:
         super().__init__()
         self.vertex_encoder = nn.Linear(vertex_in, hidden_dim)
         self.edge_encoder = nn.Linear(edge_in, hidden_dim)
         self.face_encoder = nn.Linear(face_in, hidden_dim)
         self.layers = nn.ModuleList(
-            [TNOLayer(hidden_dim=hidden_dim, dropout=dropout) for _ in range(layers)]
+            [
+                TNOLayer(hidden_dim=hidden_dim, dropout=dropout, ablation=ablation)
+                for _ in range(layers)
+            ]
         )
         self.decoder = nn.Sequential(
             nn.LayerNorm(hidden_dim),

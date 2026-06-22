@@ -29,6 +29,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dropout", type=float, default=0.0)
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--model", choices=["tno", "vertex"], default="tno")
+    parser.add_argument(
+        "--tno-ablation",
+        choices=["full", "no_face_to_edge", "no_vertex_to_edge", "no_edge_laplacian"],
+        default="full",
+        help="Disable selected TNO edge-update DEC routes.",
+    )
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument(
         "--task",
@@ -241,6 +247,7 @@ def main() -> None:
             hidden_dim=args.hidden_dim,
             layers=args.layers,
             dropout=args.dropout,
+            ablation=args.tno_ablation,
         ).to(device)
     else:
         model = VertexGraphOperator(
@@ -304,6 +311,7 @@ def main() -> None:
             f"epoch={epoch:03d} "
             f"model={args.model} "
             f"task={args.task} "
+            f"tno_ablation={args.tno_ablation} "
             f"train_mse={train_loss:.6e} train_rel_l2={train_rel:.4f} "
             f"train_sample_rel_l2={train_sample_rel:.4f} "
             f"val_mse={val_loss:.6e} val_rel_l2={val_rel:.4f} "

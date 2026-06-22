@@ -36,10 +36,27 @@ class RunSummary:
             self.args.get("darcy_orientation_blobs", 4),
             self.args.get("darcy_orientation_sigma", 0.25),
             self.args.get("darcy_min_solution_norm", 0.5),
+            self.args.get("tno_ablation", "full"),
         )
 
     @property
     def experiment_family_key(self) -> tuple[Any, ...]:
+        return (
+            self.task,
+            self.args.get("nx", 16),
+            self.args.get("ny", 16),
+            self.args.get("train_samples"),
+            self.args.get("val_samples"),
+            self.args.get("darcy_vertex_projection", "mean"),
+            self.args.get("darcy_orientation", "iid"),
+            self.args.get("darcy_orientation_blobs", 4),
+            self.args.get("darcy_orientation_sigma", 0.25),
+            self.args.get("darcy_min_solution_norm", 0.5),
+            self.args.get("tno_ablation", "full"),
+        )
+
+    @property
+    def ablation_family_key(self) -> tuple[Any, ...]:
         return (
             self.task,
             self.args.get("nx", 16),
@@ -154,10 +171,15 @@ def deduplicate_runs(runs: list[RunSummary]) -> list[RunSummary]:
 
 def describe_experiment(run: RunSummary) -> str:
     if run.task not in {"darcy", "darcy_holes", "darcy_holes_flux"}:
-        return run.task
-    projection = run.args.get("darcy_vertex_projection", "mean")
-    orientation = run.args.get("darcy_orientation", "iid")
-    return f"{run.task}/orientation={orientation}/vertex_projection={projection}"
+        base = run.task
+    else:
+        projection = run.args.get("darcy_vertex_projection", "mean")
+        orientation = run.args.get("darcy_orientation", "iid")
+        base = f"{run.task}/orientation={orientation}/vertex_projection={projection}"
+    ablation = run.args.get("tno_ablation", "full")
+    if run.model == "tno" and ablation != "full":
+        return f"{base}/tno_ablation={ablation}"
+    return base
 
 
 def make_markdown(runs: list[RunSummary]) -> str:
@@ -234,6 +256,66 @@ def make_markdown(runs: list[RunSummary]) -> str:
                 f"{improvement:+.1f}% |"
             )
 
+    lines.extend(["", "## TNO Route Ablations", ""])
+    ablation_groups: dict[tuple[Any, ...], dict[str, list[RunSummary]]] = {}
+    for run in runs:
+        if run.model != "tno":
+            continue
+        ablation = run.args.get("tno_ablation", "full")
+        ablation_groups.setdefault(run.ablation_family_key, {}).setdefault(ablation, []).append(run)
+
+    ablation_rows = []
+    for by_ablation in ablation_groups.values():
+        full_runs = by_ablation.get("full", [])
+        full_by_seed = {run.args.get("seed", 7): run for run in full_runs}
+        for ablation, ablated_runs in by_ablation.items():
+            if ablation == "full":
+                continue
+            ablated_by_seed = {run.args.get("seed", 7): run for run in ablated_runs}
+            common_seeds = sorted(set(full_by_seed) & set(ablated_by_seed))
+            if not common_seeds:
+                continue
+            full_values = [
+                full_by_seed[seed].best_val_rel_l2
+                for seed in common_seeds
+                if full_by_seed[seed].best_val_rel_l2 is not None
+            ]
+            ablated_values = [
+                ablated_by_seed[seed].best_val_rel_l2
+                for seed in common_seeds
+                if ablated_by_seed[seed].best_val_rel_l2 is not None
+            ]
+            if not full_values or not ablated_values:
+                continue
+            description = describe_experiment(full_by_seed[common_seeds[0]])
+            penalty = 100.0 * (
+                statistics.mean(ablated_values) - statistics.mean(full_values)
+            ) / statistics.mean(full_values)
+            ablation_rows.append((description, ablation, common_seeds, full_values, ablated_values, penalty))
+
+    if not ablation_rows:
+        lines.append("No matched TNO ablation runs found.")
+    else:
+        lines.extend(
+            [
+                "| Experiment | Ablation | Seeds | Full TNO | Ablated TNO | Penalty vs full |",
+                "|---|---|---:|---:|---:|---:|",
+            ]
+        )
+        for description, ablation, seeds, full_values, ablated_values, penalty in sorted(
+            ablation_rows, key=lambda item: (item[0], item[1])
+        ):
+            seed_text = ", ".join(str(seed) for seed in seeds)
+            lines.append(
+                "| "
+                f"{description} | "
+                f"{ablation} | "
+                f"{seed_text} | "
+                f"{_fmt_mean_std(full_values)} | "
+                f"{_fmt_mean_std(ablated_values)} | "
+                f"{penalty:+.1f}% |"
+            )
+
     lines.extend(["", "## Matched Comparisons", ""])
     groups: dict[tuple[Any, ...], dict[str, RunSummary]] = {}
     for run in runs:
@@ -278,7 +360,8 @@ def make_markdown(runs: list[RunSummary]) -> str:
             "- The multi-rank TNO consistently beats the vertex-only baseline in the completed matched runs so far.",
             "- The Darcy relative-error metric needed aggregate normalization because per-sample relative L2 is unstable on near-zero target fields.",
             "- Removing vertex-projected face orientation creates a cleaner test of native face cochains.",
-            "- The blob-orientation Darcy task is intended to test smoother, spatially coherent face coefficients.",
+            "- The holed Darcy task shows a stronger topology-aware signal than the simply connected square.",
+            "- The multi-rank holed Darcy task, predicting vertex potential plus edge flux, shows the strongest result so far.",
             "",
         ]
     )

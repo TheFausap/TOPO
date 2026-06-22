@@ -165,6 +165,25 @@ For repeated seeds:
 .venv/bin/python scripts/run_experiments.py --experiments darcy_holes_flux_blobs_none --seeds 7,8,9
 ```
 
+## TNO Route Ablations
+
+To check whether the multi-rank win comes from specific DEC routes, run the
+flux task with selected TNO edge-route ablations:
+
+```bash
+.venv/bin/python scripts/run_experiments.py \
+  --experiments darcy_holes_flux_blobs_none \
+  --models tno \
+  --tno-ablations full,no_face_to_edge,no_vertex_to_edge,no_edge_laplacian \
+  --seeds 7,8,9
+```
+
+Then refresh the report if needed:
+
+```bash
+.venv/bin/python scripts/summarize_results.py
+```
+
 ## Project Layout
 
 ```text

@@ -79,6 +79,17 @@ def parse_csv_experiments(value: str) -> list[str]:
     return names
 
 
+def parse_csv_ablations(value: str) -> list[str]:
+    valid = {"full", "no_face_to_edge", "no_vertex_to_edge", "no_edge_laplacian"}
+    names = [part.strip() for part in value.split(",") if part.strip()]
+    unknown = sorted(set(names) - valid)
+    if unknown:
+        raise argparse.ArgumentTypeError(
+            f"unknown ablation(s): {', '.join(unknown)}; choices: {', '.join(sorted(valid))}"
+        )
+    return names
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run paired TNO/vertex experiment sweeps.")
     parser.add_argument(
@@ -89,6 +100,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--seeds", type=parse_csv_ints, default=[7, 8, 9])
     parser.add_argument("--models", choices=["both", "tno", "vertex"], default="both")
+    parser.add_argument(
+        "--tno-ablations",
+        type=parse_csv_ablations,
+        default=["full"],
+        help="Comma-separated TNO ablations to run for TNO models.",
+    )
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--train-samples", type=int, default=512)
     parser.add_argument("--val-samples", type=int, default=128)
@@ -123,6 +140,19 @@ def selected_models(choice: str) -> list[str]:
 def output_path(outputs_dir: Path, experiment: Experiment, model: str, seed: int, quick: bool) -> Path:
     prefix = "smoke_sweep_" if quick else ""
     return outputs_dir / f"{prefix}{experiment.name}_{model}_seed{seed}.pt"
+
+
+def output_path_for_run(
+    outputs_dir: Path,
+    experiment: Experiment,
+    model: str,
+    seed: int,
+    quick: bool,
+    tno_ablation: str,
+) -> Path:
+    prefix = "smoke_sweep_" if quick else ""
+    ablation = f"_{tno_ablation}" if model == "tno" and tno_ablation != "full" else ""
+    return outputs_dir / f"{prefix}{experiment.name}_{model}{ablation}_seed{seed}.pt"
 
 
 def base_train_args(args: argparse.Namespace) -> list[str]:
@@ -171,8 +201,9 @@ def train_command(
     model: str,
     seed: int,
     save_path: Path,
+    tno_ablation: str,
 ) -> list[str]:
-    return [
+    command = [
         sys.executable,
         "train.py",
         *experiment.args,
@@ -184,6 +215,9 @@ def train_command(
         str(save_path),
         *base_train_args(args),
     ]
+    if model == "tno":
+        command.extend(["--tno-ablation", tno_ablation])
+    return command
 
 
 def run_command(command: list[str], dry_run: bool) -> None:
@@ -213,12 +247,21 @@ def main() -> None:
         experiment = EXPERIMENTS[experiment_name]
         for seed in args.seeds:
             for model in selected_models(args.models):
-                save_path = output_path(args.outputs_dir, experiment, model, seed, args.quick)
-                if save_path.exists() and not args.overwrite:
-                    print(f"skip existing {save_path}")
-                    continue
-                command = train_command(args, experiment, model, seed, save_path)
-                run_command(command, args.dry_run)
+                ablations = args.tno_ablations if model == "tno" else ["full"]
+                for ablation in ablations:
+                    save_path = output_path_for_run(
+                        args.outputs_dir,
+                        experiment,
+                        model,
+                        seed,
+                        args.quick,
+                        ablation,
+                    )
+                    if save_path.exists() and not args.overwrite:
+                        print(f"skip existing {save_path}")
+                        continue
+                    command = train_command(args, experiment, model, seed, save_path, ablation)
+                    run_command(command, args.dry_run)
     if not args.no_summary:
         refresh_summary(args)
 

@@ -44,6 +44,10 @@ Equivalent artifacts are deduplicated by experiment, model, and seed.
 | darcy_holes_flux/orientation=blobs/vertex_projection=none | 7, 8, 9 | 0.1593 +/- 0.0049 | 0.4426 +/- 0.0107 | +64.0% |
 | poisson | 7 | 0.1792 | 0.1988 | +9.8% |
 
+## TNO Route Ablations
+
+No matched TNO ablation runs found.
+
 ## Matched Comparisons
 
 | Experiment | TNO best | Vertex best | TNO improvement | Notes |
