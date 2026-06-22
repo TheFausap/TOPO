@@ -30,6 +30,15 @@ Equivalent artifacts are deduplicated by experiment, model, and seed.
 | darcy_holes_flux/orientation=blobs/vertex_projection=none | vertex | 0.4309 | 0.4349 | 0.4238 | 0.0447 | `outputs/darcy_holes_flux_blobs_none_vertex_seed7.pt` |
 | darcy_holes_flux/orientation=blobs/vertex_projection=none | vertex | 0.4518 | 0.4570 | 0.4394 | 0.0478 | `outputs/darcy_holes_flux_blobs_none_vertex_seed8.pt` |
 | darcy_holes_flux/orientation=blobs/vertex_projection=none | vertex | 0.4450 | 0.4456 | 0.4222 | 0.0462 | `outputs/darcy_holes_flux_blobs_none_vertex_seed9.pt` |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none/tno_ablation=no_edge_laplacian | tno | 0.1624 | 0.1648 | 0.1609 | 0.0074 | `outputs/darcy_holes_flux_blobs_none_tno_no_edge_laplacian_seed7.pt` |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none/tno_ablation=no_edge_laplacian | tno | 0.1705 | 0.1705 | 0.1636 | 0.0072 | `outputs/darcy_holes_flux_blobs_none_tno_no_edge_laplacian_seed8.pt` |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none/tno_ablation=no_edge_laplacian | tno | 0.1757 | 0.1772 | 0.1613 | 0.0081 | `outputs/darcy_holes_flux_blobs_none_tno_no_edge_laplacian_seed9.pt` |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none/tno_ablation=no_face_to_edge | tno | 0.1809 | 0.1820 | 0.1759 | 0.0087 | `outputs/darcy_holes_flux_blobs_none_tno_no_face_to_edge_seed7.pt` |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none/tno_ablation=no_face_to_edge | tno | 0.1906 | 0.1906 | 0.1797 | 0.0090 | `outputs/darcy_holes_flux_blobs_none_tno_no_face_to_edge_seed8.pt` |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none/tno_ablation=no_face_to_edge | tno | 0.1938 | 0.1947 | 0.1761 | 0.0097 | `outputs/darcy_holes_flux_blobs_none_tno_no_face_to_edge_seed9.pt` |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none/tno_ablation=no_vertex_to_edge | tno | 0.3682 | 0.3735 | 0.3465 | 0.0292 | `outputs/darcy_holes_flux_blobs_none_tno_no_vertex_to_edge_seed7.pt` |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none/tno_ablation=no_vertex_to_edge | tno | 0.3900 | 0.3926 | 0.3603 | 0.0310 | `outputs/darcy_holes_flux_blobs_none_tno_no_vertex_to_edge_seed8.pt` |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none/tno_ablation=no_vertex_to_edge | tno | 0.3816 | 0.3840 | 0.3440 | 0.0306 | `outputs/darcy_holes_flux_blobs_none_tno_no_vertex_to_edge_seed9.pt` |
 | poisson | tno | 0.1792 | n/a | n/a | n/a | `outputs/tno_poisson.pt` |
 | poisson | vertex | 0.1988 | n/a | n/a | n/a | `outputs/vertex_poisson.pt` |
 
@@ -46,7 +55,11 @@ Equivalent artifacts are deduplicated by experiment, model, and seed.
 
 ## TNO Route Ablations
 
-No matched TNO ablation runs found.
+| Experiment | Ablation | Seeds | Full TNO | Ablated TNO | Penalty vs full |
+|---|---|---:|---:|---:|---:|
+| darcy_holes_flux/orientation=blobs/vertex_projection=none | no_edge_laplacian | 7, 8, 9 | 0.1593 +/- 0.0049 | 0.1696 +/- 0.0067 | +6.4% |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none | no_face_to_edge | 7, 8, 9 | 0.1593 +/- 0.0049 | 0.1884 +/- 0.0068 | +18.3% |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none | no_vertex_to_edge | 7, 8, 9 | 0.1593 +/- 0.0049 | 0.3799 +/- 0.0110 | +138.5% |
 
 ## Matched Comparisons
 
@@ -72,3 +85,5 @@ No matched TNO ablation runs found.
 - Removing vertex-projected face orientation creates a cleaner test of native face cochains.
 - The holed Darcy task shows a stronger topology-aware signal than the simply connected square.
 - The multi-rank holed Darcy task, predicting vertex potential plus edge flux, shows the strongest result so far.
+- Route ablations on the multi-rank holed Darcy task identify vertex-to-edge transport as the dominant edge-flux pathway.
+- Face-to-edge transport is also important, while the edge Laplacian route provides a smaller but measurable gain.

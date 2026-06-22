@@ -362,6 +362,8 @@ def make_markdown(runs: list[RunSummary]) -> str:
             "- Removing vertex-projected face orientation creates a cleaner test of native face cochains.",
             "- The holed Darcy task shows a stronger topology-aware signal than the simply connected square.",
             "- The multi-rank holed Darcy task, predicting vertex potential plus edge flux, shows the strongest result so far.",
+            "- Route ablations on the multi-rank holed Darcy task identify vertex-to-edge transport as the dominant edge-flux pathway.",
+            "- Face-to-edge transport is also important, while the edge Laplacian route provides a smaller but measurable gain.",
             "",
         ]
     )
