@@ -39,6 +39,12 @@ Equivalent artifacts are deduplicated by experiment, model, and seed.
 | darcy_holes_flux/orientation=blobs/vertex_projection=none/tno_ablation=no_vertex_to_edge | tno | 0.3682 | 0.3735 | 0.3465 | 0.0292 | `outputs/darcy_holes_flux_blobs_none_tno_no_vertex_to_edge_seed7.pt` |
 | darcy_holes_flux/orientation=blobs/vertex_projection=none/tno_ablation=no_vertex_to_edge | tno | 0.3900 | 0.3926 | 0.3603 | 0.0310 | `outputs/darcy_holes_flux_blobs_none_tno_no_vertex_to_edge_seed8.pt` |
 | darcy_holes_flux/orientation=blobs/vertex_projection=none/tno_ablation=no_vertex_to_edge | tno | 0.3816 | 0.3840 | 0.3440 | 0.0306 | `outputs/darcy_holes_flux_blobs_none_tno_no_vertex_to_edge_seed9.pt` |
+| darcy_holes_tri_flux/orientation=blobs/vertex_projection=none | tno | 0.1734 | 0.1735 | 0.1652 | 0.0093 | `outputs/darcy_holes_tri_flux_blobs_none_tno_seed7.pt` |
+| darcy_holes_tri_flux/orientation=blobs/vertex_projection=none | tno | 0.1794 | 0.1812 | 0.1712 | 0.0101 | `outputs/darcy_holes_tri_flux_blobs_none_tno_seed8.pt` |
+| darcy_holes_tri_flux/orientation=blobs/vertex_projection=none | tno | 0.1799 | 0.1799 | 0.1616 | 0.0100 | `outputs/darcy_holes_tri_flux_blobs_none_tno_seed9.pt` |
+| darcy_holes_tri_flux/orientation=blobs/vertex_projection=none | vertex | 0.3584 | 0.3634 | 0.3447 | 0.0410 | `outputs/darcy_holes_tri_flux_blobs_none_vertex_seed7.pt` |
+| darcy_holes_tri_flux/orientation=blobs/vertex_projection=none | vertex | 0.3715 | 0.3771 | 0.3556 | 0.0434 | `outputs/darcy_holes_tri_flux_blobs_none_vertex_seed8.pt` |
+| darcy_holes_tri_flux/orientation=blobs/vertex_projection=none | vertex | 0.3672 | 0.3691 | 0.3415 | 0.0416 | `outputs/darcy_holes_tri_flux_blobs_none_vertex_seed9.pt` |
 | poisson | tno | 0.1792 | n/a | n/a | n/a | `outputs/tno_poisson.pt` |
 | poisson | vertex | 0.1988 | n/a | n/a | n/a | `outputs/vertex_poisson.pt` |
 
@@ -51,6 +57,7 @@ Equivalent artifacts are deduplicated by experiment, model, and seed.
 | darcy/orientation=iid/vertex_projection=none | 7 | 0.1847 | 0.1968 | +6.1% |
 | darcy_holes/orientation=blobs/vertex_projection=none | 7, 8, 9 | 0.0916 +/- 0.0049 | 0.1886 +/- 0.0059 | +51.4% |
 | darcy_holes_flux/orientation=blobs/vertex_projection=none | 7, 8, 9 | 0.1593 +/- 0.0049 | 0.4426 +/- 0.0107 | +64.0% |
+| darcy_holes_tri_flux/orientation=blobs/vertex_projection=none | 7, 8, 9 | 0.1776 +/- 0.0037 | 0.3657 +/- 0.0067 | +51.4% |
 | poisson | 7 | 0.1792 | 0.1988 | +9.8% |
 
 ## TNO Route Ablations
@@ -76,6 +83,9 @@ Equivalent artifacts are deduplicated by experiment, model, and seed.
 | darcy_holes_flux/orientation=blobs/vertex_projection=none | 0.1542 | 0.4309 | +64.2% | TNO better |
 | darcy_holes_flux/orientation=blobs/vertex_projection=none | 0.1598 | 0.4518 | +64.6% | TNO better |
 | darcy_holes_flux/orientation=blobs/vertex_projection=none | 0.1639 | 0.4450 | +63.2% | TNO better |
+| darcy_holes_tri_flux/orientation=blobs/vertex_projection=none | 0.1734 | 0.3584 | +51.6% | TNO better |
+| darcy_holes_tri_flux/orientation=blobs/vertex_projection=none | 0.1794 | 0.3715 | +51.7% | TNO better |
+| darcy_holes_tri_flux/orientation=blobs/vertex_projection=none | 0.1799 | 0.3672 | +51.0% | TNO better |
 | poisson | 0.1792 | 0.1988 | +9.8% | TNO better |
 
 ## Current Takeaways
@@ -87,3 +97,4 @@ Equivalent artifacts are deduplicated by experiment, model, and seed.
 - The multi-rank holed Darcy task, predicting vertex potential plus edge flux, shows the strongest result so far.
 - Route ablations on the multi-rank holed Darcy task identify vertex-to-edge transport as the dominant edge-flux pathway.
 - Face-to-edge transport is also important, while the edge Laplacian route provides a smaller but measurable gain.
+- The irregular triangulated holed flux task preserves a large TNO advantage, supporting the move toward variable-mesh generalization.

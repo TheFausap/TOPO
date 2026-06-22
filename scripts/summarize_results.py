@@ -370,7 +370,7 @@ def make_markdown(runs: list[RunSummary]) -> str:
             "- The multi-rank holed Darcy task, predicting vertex potential plus edge flux, shows the strongest result so far.",
             "- Route ablations on the multi-rank holed Darcy task identify vertex-to-edge transport as the dominant edge-flux pathway.",
             "- Face-to-edge transport is also important, while the edge Laplacian route provides a smaller but measurable gain.",
-            "- The irregular triangulated holed Darcy tasks are the next bridge toward variable-mesh generalization.",
+            "- The irregular triangulated holed flux task preserves a large TNO advantage, supporting the move toward variable-mesh generalization.",
             "",
         ]
     )
