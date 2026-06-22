@@ -24,6 +24,12 @@ Equivalent artifacts are deduplicated by experiment, model, and seed.
 | darcy_holes/orientation=blobs/vertex_projection=none | vertex | 0.1821 | 0.1870 | 0.1802 | 0.0145 | `outputs/darcy_holes_blobs_none_vertex_seed7.pt` |
 | darcy_holes/orientation=blobs/vertex_projection=none | vertex | 0.1899 | 0.1905 | 0.1792 | 0.0144 | `outputs/darcy_holes_blobs_none_vertex_seed8.pt` |
 | darcy_holes/orientation=blobs/vertex_projection=none | vertex | 0.1937 | 0.2045 | 0.1927 | 0.0169 | `outputs/darcy_holes_blobs_none_vertex_seed9.pt` |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none | tno | 0.1542 | 0.1559 | 0.1518 | 0.0069 | `outputs/darcy_holes_flux_blobs_none_tno_seed7.pt` |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none | tno | 0.1598 | 0.1598 | 0.1531 | 0.0068 | `outputs/darcy_holes_flux_blobs_none_tno_seed8.pt` |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none | tno | 0.1639 | 0.1674 | 0.1524 | 0.0078 | `outputs/darcy_holes_flux_blobs_none_tno_seed9.pt` |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none | vertex | 0.4309 | 0.4349 | 0.4238 | 0.0447 | `outputs/darcy_holes_flux_blobs_none_vertex_seed7.pt` |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none | vertex | 0.4518 | 0.4570 | 0.4394 | 0.0478 | `outputs/darcy_holes_flux_blobs_none_vertex_seed8.pt` |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none | vertex | 0.4450 | 0.4456 | 0.4222 | 0.0462 | `outputs/darcy_holes_flux_blobs_none_vertex_seed9.pt` |
 | poisson | tno | 0.1792 | n/a | n/a | n/a | `outputs/tno_poisson.pt` |
 | poisson | vertex | 0.1988 | n/a | n/a | n/a | `outputs/vertex_poisson.pt` |
 
@@ -35,6 +41,7 @@ Equivalent artifacts are deduplicated by experiment, model, and seed.
 | darcy/orientation=iid/vertex_projection=mean | 7 | 0.2021 | 0.2183 | +7.4% |
 | darcy/orientation=iid/vertex_projection=none | 7 | 0.1847 | 0.1968 | +6.1% |
 | darcy_holes/orientation=blobs/vertex_projection=none | 7, 8, 9 | 0.0916 +/- 0.0049 | 0.1886 +/- 0.0059 | +51.4% |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none | 7, 8, 9 | 0.1593 +/- 0.0049 | 0.4426 +/- 0.0107 | +64.0% |
 | poisson | 7 | 0.1792 | 0.1988 | +9.8% |
 
 ## Matched Comparisons
@@ -49,6 +56,9 @@ Equivalent artifacts are deduplicated by experiment, model, and seed.
 | darcy_holes/orientation=blobs/vertex_projection=none | 0.0894 | 0.1821 | +50.9% | TNO better |
 | darcy_holes/orientation=blobs/vertex_projection=none | 0.0882 | 0.1899 | +53.5% | TNO better |
 | darcy_holes/orientation=blobs/vertex_projection=none | 0.0972 | 0.1937 | +49.8% | TNO better |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none | 0.1542 | 0.4309 | +64.2% | TNO better |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none | 0.1598 | 0.4518 | +64.6% | TNO better |
+| darcy_holes_flux/orientation=blobs/vertex_projection=none | 0.1639 | 0.4450 | +63.2% | TNO better |
 | poisson | 0.1792 | 0.1988 | +9.8% | TNO better |
 
 ## Current Takeaways
@@ -56,4 +66,5 @@ Equivalent artifacts are deduplicated by experiment, model, and seed.
 - The multi-rank TNO consistently beats the vertex-only baseline in the completed matched runs so far.
 - The Darcy relative-error metric needed aggregate normalization because per-sample relative L2 is unstable on near-zero target fields.
 - Removing vertex-projected face orientation creates a cleaner test of native face cochains.
-- The blob-orientation Darcy task is intended to test smoother, spatially coherent face coefficients.
+- The holed Darcy task shows a stronger topology-aware signal than the simply connected square.
+- The multi-rank holed Darcy task, predicting vertex potential plus edge flux, shows the strongest result so far.
