@@ -13,6 +13,10 @@ class Experiment:
     args: tuple[str, ...]
 
 
+DEFAULT_TRAIN_MESH_SEEDS = [0, 1, 2, 3]
+DEFAULT_VAL_MESH_SEEDS = [100, 101]
+
+
 EXPERIMENTS: dict[str, Experiment] = {
     "poisson": Experiment(
         name="poisson",
@@ -97,9 +101,12 @@ EXPERIMENTS: dict[str, Experiment] = {
 
 def parse_csv_ints(value: str) -> list[int]:
     try:
-        return [int(part.strip()) for part in value.split(",") if part.strip()]
+        parsed = [int(part.strip()) for part in value.split(",") if part.strip()]
     except ValueError as exc:
         raise argparse.ArgumentTypeError("expected comma-separated integers") from exc
+    if not parsed:
+        raise argparse.ArgumentTypeError("expected at least one integer")
+    return parsed
 
 
 def parse_csv_experiments(value: str) -> list[str]:
@@ -147,6 +154,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--layers", type=int, default=4)
     parser.add_argument("--nx", type=int, default=16)
     parser.add_argument("--ny", type=int, default=16)
+    parser.add_argument(
+        "--train-mesh-seeds",
+        type=parse_csv_ints,
+        default=DEFAULT_TRAIN_MESH_SEEDS,
+        help="Comma-separated triangulation seeds forwarded to variable-mesh tasks.",
+    )
+    parser.add_argument(
+        "--val-mesh-seeds",
+        type=parse_csv_ints,
+        default=DEFAULT_VAL_MESH_SEEDS,
+        help="Comma-separated held-out triangulation seeds forwarded to variable-mesh tasks.",
+    )
     parser.add_argument("--outputs-dir", type=Path, default=Path("outputs"))
     parser.add_argument("--report", type=Path, default=Path("docs/experiment_summary.md"))
     parser.add_argument("--overwrite", action="store_true")
@@ -170,12 +189,28 @@ def selected_models(choice: str) -> list[str]:
     return [choice]
 
 
-def output_path(outputs_dir: Path, experiment: Experiment, model: str, seed: int, quick: bool) -> Path:
-    prefix = "smoke_sweep_" if quick else ""
-    return outputs_dir / f"{prefix}{experiment.name}_{model}_seed{seed}.pt"
+def uses_mesh_seed_args(experiment: Experiment) -> bool:
+    if "--task" not in experiment.args:
+        return False
+    task = experiment.args[experiment.args.index("--task") + 1]
+    return task in {"darcy_holes_tri_meshes", "darcy_holes_tri_meshes_flux"}
+
+
+def mesh_suffix(args: argparse.Namespace, experiment: Experiment) -> str:
+    if not uses_mesh_seed_args(experiment):
+        return ""
+    if (
+        args.train_mesh_seeds == DEFAULT_TRAIN_MESH_SEEDS
+        and args.val_mesh_seeds == DEFAULT_VAL_MESH_SEEDS
+    ):
+        return ""
+    train = "-".join(str(seed) for seed in args.train_mesh_seeds)
+    val = "-".join(str(seed) for seed in args.val_mesh_seeds)
+    return f"_trainmesh{train}_valmesh{val}"
 
 
 def output_path_for_run(
+    args: argparse.Namespace,
     outputs_dir: Path,
     experiment: Experiment,
     model: str,
@@ -185,12 +220,13 @@ def output_path_for_run(
 ) -> Path:
     prefix = "smoke_sweep_" if quick else ""
     ablation = f"_{tno_ablation}" if model == "tno" and tno_ablation != "full" else ""
-    return outputs_dir / f"{prefix}{experiment.name}_{model}{ablation}_seed{seed}.pt"
+    mesh = mesh_suffix(args, experiment)
+    return outputs_dir / f"{prefix}{experiment.name}{mesh}_{model}{ablation}_seed{seed}.pt"
 
 
 def base_train_args(args: argparse.Namespace) -> list[str]:
     if args.quick:
-        return [
+        command = [
             "--epochs",
             "3",
             "--train-samples",
@@ -208,24 +244,34 @@ def base_train_args(args: argparse.Namespace) -> list[str]:
             "--ny",
             "8",
         ]
-    return [
-        "--epochs",
-        str(args.epochs),
-        "--train-samples",
-        str(args.train_samples),
-        "--val-samples",
-        str(args.val_samples),
-        "--batch-size",
-        str(args.batch_size),
-        "--hidden-dim",
-        str(args.hidden_dim),
-        "--layers",
-        str(args.layers),
-        "--nx",
-        str(args.nx),
-        "--ny",
-        str(args.ny),
-    ]
+    else:
+        command = [
+            "--epochs",
+            str(args.epochs),
+            "--train-samples",
+            str(args.train_samples),
+            "--val-samples",
+            str(args.val_samples),
+            "--batch-size",
+            str(args.batch_size),
+            "--hidden-dim",
+            str(args.hidden_dim),
+            "--layers",
+            str(args.layers),
+            "--nx",
+            str(args.nx),
+            "--ny",
+            str(args.ny),
+        ]
+    command.extend(
+        [
+            "--train-mesh-seeds",
+            ",".join(str(seed) for seed in args.train_mesh_seeds),
+            "--val-mesh-seeds",
+            ",".join(str(seed) for seed in args.val_mesh_seeds),
+        ]
+    )
+    return command
 
 
 def train_command(
@@ -283,6 +329,7 @@ def main() -> None:
                 ablations = args.tno_ablations if model == "tno" else ["full"]
                 for ablation in ablations:
                     save_path = output_path_for_run(
+                        args,
                         args.outputs_dir,
                         experiment,
                         model,

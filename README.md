@@ -213,6 +213,18 @@ For repeated model/data seeds:
 .venv/bin/python scripts/run_experiments.py --experiments darcy_holes_tri_meshes_flux_blobs_none --seeds 7,8,9
 ```
 
+To test whether held-out performance improves with more training geometries:
+
+```bash
+.venv/bin/python scripts/run_experiments.py \
+  --experiments darcy_holes_tri_meshes_flux_blobs_none \
+  --seeds 7,8,9 \
+  --train-samples 1024 \
+  --val-samples 256 \
+  --train-mesh-seeds 0,1,2,3,4,5,6,7 \
+  --val-mesh-seeds 100,101,102,103
+```
+
 ## TNO Route Ablations
 
 To check whether the multi-rank win comes from specific DEC routes, run the
