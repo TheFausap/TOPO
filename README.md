@@ -124,6 +124,8 @@ Available experiment names are:
 - `darcy_blobs_none`
 - `darcy_holes_blobs_none`
 - `darcy_holes_flux_blobs_none`
+- `darcy_holes_tri_blobs_none`
+- `darcy_holes_tri_flux_blobs_none`
 
 Check the runner on tiny settings first with:
 
@@ -163,6 +165,30 @@ For repeated seeds:
 
 ```bash
 .venv/bin/python scripts/run_experiments.py --experiments darcy_holes_flux_blobs_none --seeds 7,8,9
+```
+
+## Irregular Triangulated Darcy Holes
+
+The fixed-grid holed task can also be run on a single irregular Delaunay
+triangulation of the square with the same two circular holes. This keeps the
+model and batching code fixed while testing whether the topology-aware advantage
+survives a less regular mesh.
+
+```bash
+.venv/bin/python train.py --task darcy_holes_tri_flux --model tno --epochs 100 --train-samples 512 --val-samples 128 --save outputs/tno_darcy_holes_tri_flux_blobs_no_vertex_projection.pt
+.venv/bin/python train.py --task darcy_holes_tri_flux --model vertex --epochs 100 --train-samples 512 --val-samples 128 --save outputs/vertex_darcy_holes_tri_flux_blobs_no_vertex_projection.pt
+```
+
+For repeated seeds:
+
+```bash
+.venv/bin/python scripts/run_experiments.py --experiments darcy_holes_tri_flux_blobs_none --seeds 7,8,9
+```
+
+For a quick smoke check:
+
+```bash
+.venv/bin/python scripts/run_experiments.py --quick --experiments darcy_holes_tri_flux_blobs_none --seeds 1 --overwrite
 ```
 
 ## TNO Route Ablations

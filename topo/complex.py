@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 import numpy as np
+from scipy.spatial import Delaunay
 
 
 @dataclass(frozen=True)
@@ -188,6 +189,88 @@ def grid_complex_with_holes(
                 boundary_tags[int(vertex)] = hole_tag
 
     return build_complex(new_vertices, new_faces, boundary_tags=boundary_tags)
+
+
+def triangulated_square_with_holes(
+    nx: int = 24,
+    ny: int = 24,
+    holes: Sequence[tuple[float, float, float]] | None = None,
+    seed: int = 0,
+    jitter: float = 0.35,
+    hole_points: int | None = None,
+) -> CellComplex:
+    """Create a fixed irregular triangulation of a square with circular holes."""
+    if holes is None:
+        holes = ((0.35, 0.5, 0.13), (0.65, 0.5, 0.13))
+    if nx < 4 or ny < 4:
+        raise ValueError("nx and ny must be at least 4 for a holed triangulation")
+    if not 0.0 <= jitter < 0.5:
+        raise ValueError("jitter must be in [0, 0.5)")
+
+    rng = np.random.default_rng(seed)
+    points: list[tuple[float, float]] = []
+    tags: list[int] = []
+
+    def add_point(x: float, y: float, tag: int) -> None:
+        points.append((float(x), float(y)))
+        tags.append(tag)
+
+    for x in np.linspace(0.0, 1.0, nx):
+        add_point(float(x), 0.0, -1)
+        add_point(float(x), 1.0, -1)
+    for y in np.linspace(0.0, 1.0, ny)[1:-1]:
+        add_point(0.0, float(y), -1)
+        add_point(1.0, float(y), -1)
+
+    samples_per_hole = hole_points or max(24, 2 * max(nx, ny))
+    for hole_tag, (cx, cy, radius) in enumerate(holes, start=1):
+        for theta in np.linspace(0.0, 2.0 * np.pi, samples_per_hole, endpoint=False):
+            add_point(cx + radius * np.cos(theta), cy + radius * np.sin(theta), hole_tag)
+
+    dx = 1.0 / float(nx - 1)
+    dy = 1.0 / float(ny - 1)
+    hole_margin = 0.5 * min(dx, dy)
+    for j in range(1, ny - 1):
+        for i in range(1, nx - 1):
+            x = i * dx + float(rng.uniform(-jitter, jitter)) * dx
+            y = j * dy + float(rng.uniform(-jitter, jitter)) * dy
+            inside_hole = any(
+                (x - cx) ** 2 + (y - cy) ** 2 <= (radius + hole_margin) ** 2
+                for cx, cy, radius in holes
+            )
+            if not inside_hole:
+                add_point(x, y, 0)
+
+    vertices = np.array(points, dtype=np.float32)
+    point_tags = np.array(tags, dtype=np.int64)
+    triangles = Delaunay(vertices).simplices.astype(np.int64)
+    centroids = vertices[triangles].mean(axis=1)
+    keep = np.ones(triangles.shape[0], dtype=bool)
+    for cx, cy, radius in holes:
+        dist2 = (centroids[:, 0] - cx) ** 2 + (centroids[:, 1] - cy) ** 2
+        keep &= dist2 > radius**2
+    kept_faces = triangles[keep]
+
+    used = np.unique(kept_faces.reshape(-1))
+    old_to_new = {int(old): new for new, old in enumerate(used)}
+    new_vertices = vertices[used]
+    new_faces = np.array(
+        [[old_to_new[int(vertex)] for vertex in face] for face in kept_faces],
+        dtype=np.int64,
+    )
+    new_tags = point_tags[used]
+
+    points_for_orientation = new_vertices[new_faces]
+    signed_area2 = (
+        (points_for_orientation[:, 1, 0] - points_for_orientation[:, 0, 0])
+        * (points_for_orientation[:, 2, 1] - points_for_orientation[:, 0, 1])
+        - (points_for_orientation[:, 1, 1] - points_for_orientation[:, 0, 1])
+        * (points_for_orientation[:, 2, 0] - points_for_orientation[:, 0, 0])
+    )
+    clockwise = signed_area2 < 0.0
+    new_faces[clockwise] = new_faces[clockwise][:, [0, 2, 1]]
+
+    return build_complex(new_vertices, new_faces, boundary_tags=new_tags)
 
 
 def edge_geometry(complex_: CellComplex) -> np.ndarray:

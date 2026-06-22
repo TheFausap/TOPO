@@ -10,7 +10,11 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from topo.complex import grid_complex, grid_complex_with_holes
+from topo.complex import (
+    grid_complex,
+    grid_complex_with_holes,
+    triangulated_square_with_holes,
+)
 from topo.data import AnisotropicDarcyDataset, DarcyHolesDataset, PoissonDataset, poisson_collate
 from topo.dec import DECOperators
 from topo.tno import TopologicalNeuralOperator, VertexGraphOperator
@@ -38,7 +42,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument(
         "--task",
-        choices=["poisson", "darcy", "darcy_holes", "darcy_holes_flux"],
+        choices=[
+            "poisson",
+            "darcy",
+            "darcy_holes",
+            "darcy_holes_flux",
+            "darcy_holes_tri",
+            "darcy_holes_tri_flux",
+        ],
         default="poisson",
     )
     parser.add_argument(
@@ -50,14 +61,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--darcy-vertex-projection",
         choices=["mean", "none"],
-        default="mean",
-        help="How face orientation channels are projected into Darcy vertex inputs.",
+        default=None,
+        help=(
+            "How face orientation channels are projected into Darcy vertex inputs. "
+            "Defaults to 'mean' for plain Darcy and 'none' for holed Darcy tasks."
+        ),
     )
     parser.add_argument(
         "--darcy-orientation",
         choices=["iid", "blobs"],
-        default="iid",
-        help="How per-face Darcy conductivity orientations are generated.",
+        default=None,
+        help=(
+            "How per-face Darcy conductivity orientations are generated. "
+            "Defaults to 'iid' for plain Darcy and 'blobs' for holed Darcy tasks."
+        ),
     )
     parser.add_argument(
         "--darcy-orientation-blobs",
@@ -85,6 +102,19 @@ def jsonable_args(args: argparse.Namespace) -> dict[str, object]:
     result = vars(args).copy()
     result["save"] = str(args.save)
     return result
+
+
+def apply_task_defaults(args: argparse.Namespace) -> None:
+    holed_tasks = {
+        "darcy_holes",
+        "darcy_holes_flux",
+        "darcy_holes_tri",
+        "darcy_holes_tri_flux",
+    }
+    if args.darcy_vertex_projection is None:
+        args.darcy_vertex_projection = "none" if args.task in holed_tasks else "mean"
+    if args.darcy_orientation is None:
+        args.darcy_orientation = "blobs" if args.task in holed_tasks else "iid"
 
 
 def sample_relative_l2(
@@ -164,15 +194,17 @@ def run_epoch(
 
 def main() -> None:
     args = parse_args()
+    apply_task_defaults(args)
     set_seed(args.seed)
     device = torch.device("cpu")
     run_args = jsonable_args(args)
 
-    complex_ = (
-        grid_complex_with_holes(args.nx, args.ny)
-        if args.task in {"darcy_holes", "darcy_holes_flux"}
-        else grid_complex(args.nx, args.ny)
-    )
+    if args.task in {"darcy_holes", "darcy_holes_flux"}:
+        complex_ = grid_complex_with_holes(args.nx, args.ny)
+    elif args.task in {"darcy_holes_tri", "darcy_holes_tri_flux"}:
+        complex_ = triangulated_square_with_holes(args.nx, args.ny)
+    else:
+        complex_ = grid_complex(args.nx, args.ny)
     ops = DECOperators.from_complex(complex_, device=device)
     if args.task == "poisson":
         train_data = PoissonDataset(complex_, args.train_samples, seed=args.seed)
@@ -208,7 +240,7 @@ def main() -> None:
             orientation_mode=args.darcy_orientation,
             orientation_blobs=args.darcy_orientation_blobs,
             orientation_sigma=args.darcy_orientation_sigma,
-            predict_flux=args.task == "darcy_holes_flux",
+            predict_flux=args.task in {"darcy_holes_flux", "darcy_holes_tri_flux"},
         )
         val_data = DarcyHolesDataset(
             complex_,
@@ -219,7 +251,7 @@ def main() -> None:
             orientation_mode=args.darcy_orientation,
             orientation_blobs=args.darcy_orientation_blobs,
             orientation_sigma=args.darcy_orientation_sigma,
-            predict_flux=args.task == "darcy_holes_flux",
+            predict_flux=args.task in {"darcy_holes_flux", "darcy_holes_tri_flux"},
         )
     train_loader = DataLoader(
         train_data,
